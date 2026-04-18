@@ -14,6 +14,8 @@ import { Vibe } from '../vibes/entities/vibe.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { User } from '../users/entities/user.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
+import { PushModule } from '../push/push.module';
+import { LiveModule } from '../live/live.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { ActivityLog } from '../audit/entities/activity-log.entity';
       }),
       inject: [ConfigService],
     }),
+    PushModule,
+    LiveModule,
   ],
   controllers: [BusinessController],
   providers: [BusinessService],

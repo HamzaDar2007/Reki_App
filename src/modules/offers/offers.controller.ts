@@ -6,6 +6,7 @@ import { NoGuestGuard } from '../../common/guards';
 import { CurrentUser } from '../auth/decorators';
 import { User } from '../users/entities/user.entity';
 import { ErrorCode } from '../../common/enums';
+import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
 
 @ApiTags('Offers')
 @Controller('offers')
@@ -13,6 +14,7 @@ export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 
   @Get(':id')
+  @CacheTTL(120)
   @ApiOperation({ summary: 'Get offer detail by ID' })
   async findOne(@Param('id') id: string) {
     const offer = await this.offersService.findById(id);
@@ -45,6 +47,7 @@ export class OffersController {
   }
 
   @Post(':id/claim')
+  @NoCache()
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Claim offer — generates voucher code + QR' })
@@ -81,6 +84,7 @@ export class OffersController {
   }
 
   @Post(':id/redeem')
+  @NoCache()
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Redeem a claimed offer' })

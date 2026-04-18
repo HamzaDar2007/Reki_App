@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Post, NotFoundException, Req } from '@ne
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
 import { ErrorCode } from '../../common/enums';
+import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
 
 @ApiTags('Venues')
 @Controller('venues')
@@ -9,6 +10,7 @@ export class VenuesController {
   constructor(private readonly venuesService: VenuesService) {}
 
   @Get()
+  @CacheTTL(120)
   @ApiOperation({ summary: 'List venues with filters + pagination + personalization' })
   @ApiQuery({ name: 'city', required: false })
   @ApiQuery({ name: 'category', required: false })
@@ -22,6 +24,7 @@ export class VenuesController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'lat', required: false, type: Number, description: 'User latitude for distance calc' })
   @ApiQuery({ name: 'lng', required: false, type: Number, description: 'User longitude for distance calc' })
+  @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Max distance in miles (Near Me filter)' })
   async findAll(
     @Query('city') city?: string,
     @Query('category') category?: string,
@@ -35,6 +38,7 @@ export class VenuesController {
     @Query('limit') limit?: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
+    @Query('radius') radius?: string,
     @Req() req?: any,
   ) {
     // Get user preferences if authenticated
@@ -54,6 +58,7 @@ export class VenuesController {
         limit: limit ? Number(limit) : undefined,
         userLat: lat ? Number(lat) : undefined,
         userLng: lng ? Number(lng) : undefined,
+        radius: radius ? Number(radius) : undefined,
       },
       userPreferences,
     );
@@ -65,6 +70,7 @@ export class VenuesController {
   }
 
   @Get('search')
+  @CacheTTL(60)
   @ApiOperation({ summary: 'Search venues by name, area, or tags' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
   @ApiQuery({ name: 'city', required: false })
@@ -74,6 +80,7 @@ export class VenuesController {
   }
 
   @Get('filter-options')
+  @CacheTTL(3600)
   @ApiOperation({ summary: 'Get available filter options for a city' })
   @ApiQuery({ name: 'city', required: false })
   async getFilterOptions(@Query('city') city?: string) {
@@ -81,6 +88,7 @@ export class VenuesController {
   }
 
   @Get('trending')
+  @CacheTTL(60)
   @ApiOperation({ summary: 'Top 5 trending venues by busyness' })
   @ApiQuery({ name: 'city', required: false })
   async getTrending(@Query('city') city?: string) {
@@ -88,23 +96,44 @@ export class VenuesController {
   }
 
   @Get('map-markers')
-  @ApiOperation({ summary: 'Get map marker data for all venues' })
+  @CacheTTL(120)
+  @ApiOperation({ summary: 'Get map marker data with RAG colors and optional viewport bounds' })
   @ApiQuery({ name: 'city', required: false })
   @ApiQuery({ name: 'lat', required: false, type: Number, description: 'User latitude for distance' })
   @ApiQuery({ name: 'lng', required: false, type: Number, description: 'User longitude for distance' })
+  @ApiQuery({ name: 'swLat', required: false, type: Number, description: 'Southwest bound latitude' })
+  @ApiQuery({ name: 'swLng', required: false, type: Number, description: 'Southwest bound longitude' })
+  @ApiQuery({ name: 'neLat', required: false, type: Number, description: 'Northeast bound latitude' })
+  @ApiQuery({ name: 'neLng', required: false, type: Number, description: 'Northeast bound longitude' })
   async getMapMarkers(
     @Query('city') city?: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
+    @Query('swLat') swLat?: string,
+    @Query('swLng') swLng?: string,
+    @Query('neLat') neLat?: string,
+    @Query('neLng') neLng?: string,
   ) {
-    return this.venuesService.getMapMarkers(
+    const bounds = swLat && swLng && neLat && neLng
+      ? { swLat: Number(swLat), swLng: Number(swLng), neLat: Number(neLat), neLng: Number(neLng) }
+      : undefined;
+
+    const markers = await this.venuesService.getMapMarkers(
       city,
       lat ? Number(lat) : undefined,
       lng ? Number(lng) : undefined,
+      bounds,
     );
+
+    const response: any = { markers };
+    if (lat && lng) {
+      response.userLocation = { lat: Number(lat), lng: Number(lng) };
+    }
+    return response;
   }
 
   @Get(':id')
+  @CacheTTL(300)
   @ApiOperation({ summary: 'Get venue detail by ID' })
   @ApiQuery({ name: 'lat', required: false, type: Number })
   @ApiQuery({ name: 'lng', required: false, type: Number })
@@ -128,6 +157,7 @@ export class VenuesController {
   }
 
   @Post(':id/view')
+  @NoCache()
   @ApiOperation({ summary: 'Track venue view' })
   async trackView(@Param('id') id: string) {
     await this.venuesService.trackView(id);

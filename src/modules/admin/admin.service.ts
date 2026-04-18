@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
@@ -8,7 +8,13 @@ import { Redemption } from '../offers/entities/redemption.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusinessUser } from '../business/entities/business-user.entity';
+import { GeofenceLog } from '../geofence/entities/geofence-log.entity';
+import { Device } from '../devices/entities/device.entity';
+import { SyncAction } from '../sync/entities/sync-action.entity';
 import { paginate } from '../../common/dto';
+import { PushService } from '../push/push.service';
+import { LiveGateway } from '../live/live.gateway';
+import { SyncService } from '../sync/sync.service';
 
 @Injectable()
 export class AdminService {
@@ -27,6 +33,13 @@ export class AdminService {
     private activityLogsRepository: Repository<ActivityLog>,
     @InjectRepository(BusinessUser)
     private businessUsersRepository: Repository<BusinessUser>,
+    @InjectRepository(GeofenceLog)
+    private geofenceLogsRepository: Repository<GeofenceLog>,
+    @InjectRepository(Device)
+    private devicesRepository: Repository<Device>,
+    private pushService: PushService,
+    private liveGateway: LiveGateway,
+    private syncService: SyncService,
   ) {}
 
   async getStats() {
@@ -56,6 +69,34 @@ export class AdminService {
       redemptionsToday,
       newSignupsToday,
       liveVenuesNow,
+    };
+  }
+
+  async getLocationStats() {
+    const usersWithLocation = await this.usersRepository.count({
+      where: { locationEnabled: true },
+    });
+    const geofenceNotificationsSent = await this.geofenceLogsRepository.count();
+
+    const topAreas = await this.venuesRepository
+      .createQueryBuilder('venue')
+      .leftJoin('venue.busyness', 'busyness')
+      .select('venue.area', 'name')
+      .addSelect('COUNT(venue.id)', 'venueCount')
+      .addSelect('ROUND(AVG(busyness.percentage))', 'avgBusyness')
+      .groupBy('venue.area')
+      .orderBy('"avgBusyness"', 'DESC')
+      .limit(5)
+      .getRawMany();
+
+    return {
+      usersWithLocation,
+      geofenceNotificationsSent,
+      topAreas: topAreas.map((a) => ({
+        name: a.name,
+        venueCount: parseInt(a.venueCount, 10),
+        avgBusyness: parseInt(a.avgBusyness, 10) || 0,
+      })),
     };
   }
 
@@ -217,5 +258,32 @@ export class AdminService {
       return currentTime >= venue.openingHours || currentTime <= venue.closingTime;
     }
     return currentTime >= venue.openingHours && currentTime <= venue.closingTime;
+  }
+
+  // ─── WEEK 9: Real-Time Stats ──────────────────────────
+
+  async getRealTimeStats() {
+    const connectionStats = this.liveGateway.getConnectionStats();
+    const pushStats = this.pushService.getStats();
+    const activeDevices = await this.devicesRepository.count({ where: { isActive: true } });
+
+    return {
+      realTimeStats: {
+        activeWebSocketConnections: connectionStats.activeConnections,
+        uniqueConnectedUsers: connectionStats.uniqueUsers,
+        pushNotificationsSentToday: pushStats.totalSent,
+        pushDelivered: pushStats.delivered,
+        pushFailed: pushStats.failed,
+        pushOpenRate: pushStats.openRate,
+        registeredDevices: activeDevices,
+        fcmConfigured: this.pushService.isConfigured(),
+      },
+    };
+  }
+
+  // ─── WEEK 10: Offline Sync Stats ─────────────────────
+
+  async getOfflineStats() {
+    return this.syncService.getOfflineStats();
   }
 }

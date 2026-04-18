@@ -20,13 +20,13 @@ describe('VenuesController', () => {
   });
 
   it('findAll', async () => {
-    const result = await controller.findAll('Manchester', 'bar', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, { user: null });
+    const result = await controller.findAll('Manchester', 'bar', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, { user: null });
     expect(service.findAll).toHaveBeenCalled();
     expect(result.city).toBe('Manchester');
   });
 
   it('findAll defaults city to Manchester', async () => {
-    const result = await controller.findAll(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {});
+    const result = await controller.findAll(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {});
     expect(result.city).toBe('Manchester');
   });
 
@@ -48,7 +48,7 @@ describe('VenuesController', () => {
 
   it('getMapMarkers', async () => {
     await controller.getMapMarkers('Manchester', '53.48', '-2.24');
-    expect(service.getMapMarkers).toHaveBeenCalledWith('Manchester', 53.48, -2.24);
+    expect(service.getMapMarkers).toHaveBeenCalledWith('Manchester', 53.48, -2.24, undefined);
   });
 
   it('findOne', async () => {

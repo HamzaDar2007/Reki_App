@@ -20,6 +20,12 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
+  @Get('stats/location')
+  @ApiOperation({ summary: 'Get location-related stats (admin only)' })
+  async getLocationStats() {
+    return this.adminService.getLocationStats();
+  }
+
   @Get('users')
   @ApiOperation({ summary: 'List all users (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -102,5 +108,17 @@ export class AdminController {
       page ? Number(page) : 1,
       limit ? Number(limit) : 20,
     );
+  }
+
+  @Get('stats/realtime')
+  @ApiOperation({ summary: 'Get real-time stats — WebSocket connections, push analytics (admin only)' })
+  async getRealTimeStats() {
+    return this.adminService.getRealTimeStats();
+  }
+
+  @Get('stats/offline')
+  @ApiOperation({ summary: 'Get offline sync stats (admin only)' })
+  async getOfflineStats() {
+    return this.adminService.getOfflineStats();
   }
 }

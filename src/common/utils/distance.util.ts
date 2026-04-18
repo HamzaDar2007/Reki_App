@@ -30,15 +30,42 @@ export function formatDistance(miles: number): string {
 }
 
 /**
- * Get busyness indicator color based on percentage.
- * Green: 0-50% (comfortable)
- * Amber: 51-79% (getting busy)
- * Red: 80-100% (packed)
+ * Get RAG busyness indicator color based on percentage.
+ * Green: 0-33% (quiet, easy entry)
+ * Amber: 34-66% (getting busy, some wait possible)
+ * Red: 67-100% (packed, may restrict entry)
  */
 export function getBusynessColor(percentage: number): string {
-  if (percentage <= 50) return 'green';
-  if (percentage <= 79) return 'amber';
+  if (percentage <= 33) return 'green';
+  if (percentage <= 66) return 'amber';
   return 'red';
+}
+
+/**
+ * Estimate walking time based on distance in miles.
+ * Average walking speed: ~3 mph → 20 min per mile.
+ */
+export function estimateWalkingTime(miles: number): string {
+  const minutes = Math.round(miles * 20);
+  if (minutes < 1) return '1 min';
+  return `${minutes} min`;
+}
+
+/**
+ * Generate navigation deep links for a venue's coordinates.
+ */
+export function getNavigationLinks(lat: number, lng: number): {
+  googleMaps: string;
+  appleMaps: string;
+  waze: string;
+  webFallback: string;
+} {
+  return {
+    googleMaps: `comgooglemaps://?daddr=${lat},${lng}`,
+    appleMaps: `maps://?daddr=${lat},${lng}`,
+    waze: `waze://?ll=${lat},${lng}&navigate=yes`,
+    webFallback: `https://maps.google.com/maps?daddr=${lat},${lng}`,
+  };
 }
 
 /**

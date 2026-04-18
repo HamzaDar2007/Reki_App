@@ -19,6 +19,7 @@ import { VenueAnalytics } from '../../business/entities/venue-analytics.entity';
 @Index('IDX_venue_category', ['category'])
 @Index('IDX_venue_price', ['priceLevel'])
 @Index('IDX_venue_city_category', ['city', 'category'])
+@Index('IDX_venue_lat_lng', ['lat', 'lng'])
 export class Venue {
   @PrimaryGeneratedColumn('uuid')
   id: string;

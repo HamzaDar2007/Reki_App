@@ -21,6 +21,7 @@ describe('NotificationsService', () => {
   beforeEach(async () => {
     repo = {
       find: jest.fn(),
+      findAndCount: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
@@ -39,10 +40,11 @@ describe('NotificationsService', () => {
 
   describe('findByUserId', () => {
     it('should return notifications for user', async () => {
-      repo.find.mockResolvedValue([mockNotification]);
+      repo.findAndCount.mockResolvedValue([[mockNotification], 1]);
       const result = await service.findByUserId('user-1');
-      expect(result).toHaveLength(1);
-      expect(repo.find).toHaveBeenCalledWith(
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(repo.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 'user-1' } }),
       );
     });
@@ -56,10 +58,13 @@ describe('NotificationsService', () => {
       const earlier = new Date(today);
       earlier.setDate(earlier.getDate() - 5);
 
-      repo.find.mockResolvedValue([
-        { ...mockNotification, id: 'n-1', createdAt: today },
-        { ...mockNotification, id: 'n-2', createdAt: yesterday },
-        { ...mockNotification, id: 'n-3', createdAt: earlier },
+      repo.findAndCount.mockResolvedValue([
+        [
+          { ...mockNotification, id: 'n-1', createdAt: today },
+          { ...mockNotification, id: 'n-2', createdAt: yesterday },
+          { ...mockNotification, id: 'n-3', createdAt: earlier },
+        ],
+        3,
       ]);
 
       const result = await service.findGroupedByUserId('user-1');
@@ -69,7 +74,7 @@ describe('NotificationsService', () => {
     });
 
     it('should handle empty notifications', async () => {
-      repo.find.mockResolvedValue([]);
+      repo.findAndCount.mockResolvedValue([[], 0]);
       const result = await service.findGroupedByUserId('user-1');
       expect(result.today).toHaveLength(0);
       expect(result.yesterday).toHaveLength(0);

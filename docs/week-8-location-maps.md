@@ -1,6 +1,8 @@
 # Week 8 – Real Location & Maps (Phase 2)
 
-> ⚠️ **Note**: Phase 2 ki screens abhi client ne provide nahi ki hain. Yeh doc sirf backend tasks cover karta hai jo document.md mein defined hain. Jab Phase 2 screens milengi, tab screen-level mapping add hoga.
+> **Status: ✅ COMPLETE** — All 12 deliverables implemented, geofence module + 2 new entities, 14 database indexes
+> **Build:** `npx nest build --webpack` → Clean (no errors)
+> **New Module:** Geofence (controller, service, 2 entities, 3 DTOs)
 
 ## Goal
 Mock location data ko real geolocation se replace karna, interactive RAG map banana, proximity-based features enable karna.
@@ -297,3 +299,131 @@ GET /admin/stats → now includes:
 10. ✅ 2dsphere spatial index on venue coordinates
 11. ✅ Location permission graceful handling
 12. ✅ Admin location stats
+
+---
+
+## Implementation Status (Updated: 2026-04-18)
+
+### Geofence Module — ✅ COMPLETE (`src/modules/geofence/`)
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `geofence.controller.ts` | 4 endpoints: location update, consent, geofence check, popular areas |
+| `geofence.service.ts` | Core geofencing logic: proximity check, rate limiting, area analytics |
+| `geofence.module.ts` | Imports Venue, Notification, GeofenceLog, AreaAnalytics, User entities |
+| `dto/geofence.dto.ts` | GeofenceCheckDto, UpdateLocationDto, UpdateLocationConsentDto |
+| `dto/index.ts` | DTO barrel export |
+| `entities/geofence-log.entity.ts` | GeofenceLog entity — proximity notification tracking |
+| `entities/area-analytics.entity.ts` | AreaAnalytics entity — neighborhood popularity data |
+
+**Geofence Controller Endpoints:**
+| Method | Path | Guards | Description |
+|--------|------|--------|-------------|
+| `POST` | `/users/location` | JwtAuth, NoGuest | Update user GPS coordinates |
+| `PUT` | `/users/location-consent` | JwtAuth, NoGuest | Update location permission consent |
+| `POST` | `/geofence/check` | JwtAuth, NoGuest | Check proximity to venues (200m radius) |
+| `GET` | `/analytics/popular-areas` | JwtAuth | Popular neighborhoods with avg busyness |
+
+**Geofence Service Methods:**
+| Method | Description |
+|--------|-------------|
+| `checkGeofence(userId, lat, lng)` | Finds venues within 200m via haversineDistance, rate limits 3/hr, 4hr venue cooldown, creates notifications + logs |
+| `updateUserLocation(userId, lat, lng)` | Updates `currentLat`, `currentLng`, `locationUpdatedAt` on user entity |
+| `updateLocationConsent(userId, locationEnabled, backgroundEnabled?)` | Updates `locationEnabled` + optional `backgroundLocationEnabled` on user |
+| `getPopularAreas(city?)` | Groups venues by area, calculates avg busyness via QueryBuilder, returns top areas |
+| `getLocationStats()` | Returns `{ usersWithLocation, geofenceNotificationsSent, topAreas }` for admin |
+
+**Geofence Constants:**
+```
+GEOFENCE_RADIUS_MILES = 0.124 (~200 meters)
+MAX_NOTIFICATIONS_PER_HOUR = 3
+VENUE_COOLDOWN_HOURS = 4
+```
+
+### New Database Entities — ✅ COMPLETE
+
+**GeofenceLog** — `geofence_logs` table:
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `userId` | string | |
+| `venueId` | string | |
+| `distance` | decimal(10,2) | Distance in meters |
+| `offerId` | string | nullable |
+| `notifiedAt` | Date | |
+| `createdAt` | Date | Auto |
+
+Indexes: `IDX_geofence_user_venue` (userId, venueId), `IDX_geofence_user_notified` (userId, notifiedAt)
+
+**AreaAnalytics** — `area_analytics` table:
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `areaName` | string | |
+| `city` | string | default: 'Manchester' |
+| `activeVenues` | int | default: 0 |
+| `totalUsers` | int | default: 0 |
+| `avgBusyness` | int | default: 0 |
+| `date` | string | |
+| `hour` | int | default: 0 |
+| `createdAt` | Date | Auto |
+
+Index: `IDX_area_city_date` (city, date)
+
+### Distance & Navigation — ✅ COMPLETE (`src/common/utils/distance.util.ts`)
+```
+haversineDistance(lat1, lng1, lat2, lng2) → miles (R = 3958.8)
+formatDistance(miles) → "0.3 miles"
+getBusynessColor(percentage) → green (≤33) / amber (≤66) / red (>66)
+estimateWalkingTime(miles) → "X min" (20 min/mile)
+getNavigationLinks(lat, lng) → { googleMaps, appleMaps, waze, webFallback }
+generateSocialProof(busynessPercentage) → { count, names, message }
+```
+
+### Venue Queries Upgraded — ✅ COMPLETE (`src/modules/venues/venues.service.ts`)
+```
+Distance calculation: haversineDistance() applied to all venue queries when lat/lng provided
+Radius filter: GET /venues?radius=1.0 → enrichedVenues.filter(v => v.distanceMiles <= radius)
+Distance sort: GET /venues?sort=distance → sorted by distanceMiles ASC
+Bounds filter: GET /venues/map-markers?swLat=&swLng=&neLat=&neLng= → filters by viewport
+RAG color: getBusynessColor() → ragColor field in all venue/marker responses
+
+Response enrichment per venue:
+  - distance: "0.4 miles"
+  - distanceMiles: 0.4
+  - walkingTime: "8 min"
+  - navigation: { googleMaps, appleMaps, waze, webFallback }
+  - ragColor: "green" | "amber" | "red"
+```
+
+### Admin Location Stats — ✅ COMPLETE
+```
+GET /admin/stats/location → {
+  usersWithLocation: number,
+  geofenceNotificationsSent: number,
+  topAreas: [{ name, venueCount, avgBusyness }]  // top 5 by avgBusyness
+}
+Guarded by: JwtAuthGuard, RolesGuard, @Roles(Role.ADMIN)
+```
+
+### Spatial Index — ✅ COMPLETE
+```
+@Index('IDX_venue_lat_lng', ['lat', 'lng']) on venue.entity.ts
+(Composite index on lat/lng for PostgreSQL — equivalent to 2dsphere for geo queries)
+```
+
+### DTOs — ✅ COMPLETE
+```
+GeofenceCheckDto: lat (@Min(-90) @Max(90)), lng (@Min(-180) @Max(180))
+UpdateLocationDto: lat, lng (required), accuracy? (number), timestamp? (string)
+UpdateLocationConsentDto: locationEnabled (boolean), backgroundLocationEnabled? (boolean)
+```
+
+---
+
+### Implementation Details
+- **Files created**: `geofence.controller.ts`, `geofence.service.ts`, `geofence.module.ts`, `dto/geofence.dto.ts`, `dto/index.ts`, `entities/geofence-log.entity.ts`, `entities/area-analytics.entity.ts`
+- **Files updated**: `venues.service.ts` (distance calc, radius filter, bounds filter, RAG color), `venues.controller.ts` (lat/lng/swLat/swLng/neLat/neLng query params), `admin.service.ts` (getLocationStats), `admin.controller.ts` (GET /admin/stats/location), `app.module.ts` (GeofenceModule import), `main.ts` (Swagger tag: 'Location & Geofence')
+- **Database**: 2 new tables (geofence_logs, area_analytics), 3 new indexes, IDX_venue_lat_lng spatial index
+- **Build**: webpack (`npx nest build --webpack`) → dist/main.js

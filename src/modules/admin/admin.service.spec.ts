@@ -8,6 +8,11 @@ import { Redemption } from '../offers/entities/redemption.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusinessUser } from '../business/entities/business-user.entity';
+import { GeofenceLog } from '../geofence/entities/geofence-log.entity';
+import { Device } from '../devices/entities/device.entity';
+import { PushService } from '../push/push.service';
+import { LiveGateway } from '../live/live.gateway';
+import { SyncService } from '../sync/sync.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -51,6 +56,8 @@ describe('AdminService', () => {
     activityLogsRepo = { find: jest.fn(), findAndCount: jest.fn() };
     businessUsersRepo = {};
 
+    const geofenceLogsRepo = { count: jest.fn().mockResolvedValue(0) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
@@ -61,6 +68,11 @@ describe('AdminService', () => {
         { provide: getRepositoryToken(Notification), useValue: notificationsRepo },
         { provide: getRepositoryToken(ActivityLog), useValue: activityLogsRepo },
         { provide: getRepositoryToken(BusinessUser), useValue: businessUsersRepo },
+        { provide: getRepositoryToken(GeofenceLog), useValue: geofenceLogsRepo },
+        { provide: getRepositoryToken(Device), useValue: { count: jest.fn().mockResolvedValue(0) } },
+        { provide: PushService, useValue: { getStats: jest.fn().mockReturnValue({ totalSent: 0, delivered: 0, failed: 0, opened: 0, openRate: '0%' }), isConfigured: jest.fn().mockReturnValue(false) } },
+        { provide: LiveGateway, useValue: { getConnectionStats: jest.fn().mockReturnValue({ activeConnections: 0, uniqueUsers: 0, venueViewers: {} }) } },
+        { provide: SyncService, useValue: { getOfflineStats: jest.fn().mockResolvedValue({ totalSyncActions: 0, pendingSyncActions: 0, successfulSyncs: 0, conflictsToday: 0, rejectedToday: 0, syncSuccessRate: '0.0%', avgSyncDelay: '0 minutes' }) } },
       ],
     }).compile();
 

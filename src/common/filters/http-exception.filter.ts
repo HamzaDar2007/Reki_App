@@ -4,15 +4,20 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { ErrorCode } from '../enums';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('ExceptionFilter');
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let errorCode = ErrorCode.SERVER_ERROR;
@@ -29,6 +34,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else {
         message = exception.message;
       }
+    }
+
+    // Report 5xx errors to Sentry
+    if (status >= 500) {
+      Sentry.withScope((scope) => {
+        scope.setExtra('url', request?.url);
+        scope.setExtra('method', request?.method);
+        scope.setExtra('statusCode', status);
+        Sentry.captureException(exception);
+      });
+      this.logger.error(`${request?.method} ${request?.url} ${status} — ${message}`);
     }
 
     response.status(status).json({

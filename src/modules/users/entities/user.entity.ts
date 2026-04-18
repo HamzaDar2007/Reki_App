@@ -48,6 +48,25 @@ export class User {
   @Column('text', { array: true, default: '{}' })
   savedVenues: string[];
 
+  // Location fields
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  currentLat: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  currentLng: number;
+
+  @Column({ nullable: true })
+  locationUpdatedAt: Date;
+
+  @Column({ default: false })
+  locationEnabled: boolean;
+
+  @Column({ default: false })
+  backgroundLocationEnabled: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  appState: Record<string, any>;
+
   @OneToMany(() => Notification, (notification) => notification.user)
   notifications: Notification[];
 

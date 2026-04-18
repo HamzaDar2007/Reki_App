@@ -23,6 +23,9 @@ import { User } from '../users/entities/user.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusynessLevel, BusynessPercentageMap, VenueCategory, NotificationType, ErrorCode } from '../../common/enums';
 import { BusinessRegisterDto } from './dto';
+import { PushService } from '../push/push.service';
+import { LiveGateway } from '../live/live.gateway';
+import { getBusynessColor } from '../../common/utils/distance.util';
 
 @Injectable()
 export class BusinessService {
@@ -49,6 +52,8 @@ export class BusinessService {
     private activityLogsRepository: Repository<ActivityLog>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private pushService: PushService,
+    private liveGateway: LiveGateway,
   ) {}
 
   // ─── AUTH ──────────────────────────────────────────────
@@ -304,6 +309,17 @@ export class BusinessService {
       await this.triggerVibeAlert(venueId);
     }
 
+    // ── WEEK 9: Broadcast real-time updates ──
+    const venue = await this.venuesRepository.findOne({ where: { id: venueId } });
+    const city = venue?.city?.toLowerCase() || 'manchester';
+    const ragColor = getBusynessColor(percentage);
+    this.liveGateway.broadcastBusynessUpdate(city, venueId, {
+      level: busynessLevel,
+      percentage,
+      ragColor,
+      vibeTags: vibes,
+    });
+
     return {
       success: true,
       message: 'Status updated! Updates are shared with REKI community.',
@@ -336,12 +352,14 @@ export class BusinessService {
 
   // ─── OFFERS ────────────────────────────────────────────
 
-  async getVenueOffers(venueId: string, businessUserId: string) {
+  async getVenueOffers(venueId: string, businessUserId: string, page = 1, limit = 20) {
     await this.verifyOwnership(venueId, businessUserId);
 
-    const offers = await this.offersRepository.find({
+    const [offers, total] = await this.offersRepository.findAndCount({
       where: { venueId },
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     const activeDeals = offers
@@ -364,7 +382,18 @@ export class BusinessService {
         isActive: false,
       }));
 
-    return { activeDeals, upcomingAndPast };
+    return {
+      activeDeals,
+      upcomingAndPast,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async createOffer(
@@ -389,11 +418,20 @@ export class BusinessService {
     });
 
     // Notify users who saved this venue
+    const venueName = (await this.venuesRepository.findOne({ where: { id: venueId } }))?.name || 'Venue';
     await this.notifySavedUsers(venueId, {
       type: NotificationType.OFFER_CONFIRMATION,
-      title: `New offer at ${(await this.venuesRepository.findOne({ where: { id: venueId } }))?.name}!`,
+      title: `New offer at ${venueName}!`,
       message: saved.title,
       offerId: saved.id,
+    });
+
+    // ── WEEK 9: Broadcast new offer to city feed ──
+    const offerVenue = await this.venuesRepository.findOne({ where: { id: venueId } });
+    const city = offerVenue?.city?.toLowerCase() || 'manchester';
+    this.liveGateway.broadcastNewOffer(city, venueId, {
+      venueName,
+      title: saved.title,
     });
 
     return { success: true, offer: saved };
@@ -540,6 +578,17 @@ export class BusinessService {
 
     if (notifications.length > 0) {
       await this.notificationsRepository.save(notifications);
+
+      // ── WEEK 9: Send push notifications to saved users ──
+      await this.pushService.sendToUsers(
+        users.map((u) => u.id),
+        NotificationType.VIBE_ALERT,
+        {
+          title: `🔥 ${venue.name} is peaking!`,
+          body: '80%+ capacity reached. Grab your spot!',
+          data: { type: 'VIBE_ALERT', venueId, deepLink: `reki://venue/${venueId}` },
+        },
+      );
     }
   }
 

@@ -112,11 +112,20 @@ export class BusinessController {
   @UseGuards(JwtAuthGuard, BusinessGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List venue offers (active + past)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   async getVenueOffers(
     @Param('id') venueId: string,
     @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.businessService.getVenueOffers(venueId, user.id);
+    return this.businessService.getVenueOffers(
+      venueId,
+      user.id,
+      parseInt(page, 10) || 1,
+      parseInt(limit, 10) || 20,
+    );
   }
 
   @Post('business/offers')

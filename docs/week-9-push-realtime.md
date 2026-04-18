@@ -1,6 +1,9 @@
 # Week 9 – Push Notifications & Real-Time (Phase 2)
 
-> ⚠️ **Note**: Phase 2 ki screens abhi client ne provide nahi ki hain. Yeh doc sirf backend tasks cover karta hai jo document.md mein defined hain. Jab Phase 2 screens milengi, tab screen-level mapping add hoga.
+> **Status: ✅ COMPLETE** — All 14 deliverables implemented, 3 new modules (Devices, Push, Live), FCM + WebSocket + SSE
+> **Build:** `npx nest build --webpack` → Clean (no errors)
+> **Tests:** 37 suites, 339 tests, 0 failures (mock providers added for PushService + LiveGateway)
+> **New Packages:** firebase-admin@^13.8.0, @nestjs/websockets@^11.1.19, @nestjs/platform-socket.io@^11.1.19, socket.io@^4.8.3
 
 ## Goal
 Remote push notifications enable karna (FCM), real-time data updates lagana (WebSocket/SSE), user re-engagement drive karna.
@@ -330,3 +333,231 @@ GET /admin/stats → includes:
 12. ✅ Offer countdown (real-time minutes remaining)
 13. ✅ Fallback: WebSocket → SSE → Polling
 14. ✅ Notification delivery tracking (sent/delivered/opened)
+
+---
+
+## Implementation Status (Updated: 2026-04-18)
+
+### Devices Module — ✅ COMPLETE (`src/modules/devices/`)
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `devices.controller.ts` | 4 endpoints: register device, deactivate, get prefs, update prefs |
+| `devices.service.ts` | Device management + notification preference logic + quiet hours |
+| `devices.module.ts` | Exports DevicesService for use by PushModule |
+| `dto/register-device.dto.ts` | fcmToken, platform (enum), deviceId, appVersion (optional) |
+| `dto/update-notification-preferences.dto.ts` | 6 boolean toggles + quietHoursStart/End (HH:mm regex) |
+| `dto/index.ts` | DTO barrel export |
+| `entities/device.entity.ts` | Device entity — fcmToken, platform, userId, isActive |
+| `entities/notification-preference.entity.ts` | NotificationPreference — 6 toggles + quiet hours |
+
+**Devices Controller Endpoints:**
+| Method | Path | Guards | Description |
+|--------|------|--------|-------------|
+| `POST` | `/devices/register` | JwtAuth | Register device for push notifications |
+| `DELETE` | `/devices/:deviceId` | JwtAuth | Deactivate device on logout |
+| `GET` | `/users/notification-preferences` | JwtAuth | Get notification preference settings |
+| `PUT` | `/users/notification-preferences` | JwtAuth | Update 6 notification types + quiet hours |
+
+**Devices Service Methods:**
+| Method | Description |
+|--------|-------------|
+| `registerDevice(userId, dto)` | Upsert by fcmToken — updates existing or creates new device |
+| `deactivateDevice(deviceId, userId)` | Sets `isActive = false` |
+| `getActiveDevicesByUserId(userId)` | Returns active devices for a user |
+| `markDeviceInactive(fcmToken)` | Deactivates by FCM token (invalid token cleanup) |
+| `getActiveDeviceCount()` | Count of all active devices |
+| `getPreferences(userId)` | Get or auto-create default preferences |
+| `updatePreferences(userId, dto)` | Update preferences |
+| `shouldSendPush(userId, type)` | Checks type preference map + quiet hours (overnight support) |
+
+**shouldSendPush Type Map:**
+```
+vibe_alert → vibeAlerts
+live_performance → livePerformance
+social_checkin → socialCheckins
+offer_confirmation → offerAlerts
+proximity_offer → proximityAlerts
+weekly_recap → weeklyRecap
+```
+
+### Device Entity — `devices` table:
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `userId` | string | FK → User (CASCADE delete) |
+| `fcmToken` | string | |
+| `platform` | enum DevicePlatform | `ios` / `android` / `web`, default: `ios` |
+| `deviceId` | string | |
+| `appVersion` | string | nullable |
+| `isActive` | boolean | default: `true` |
+| `lastActiveAt` | Date | nullable |
+| `createdAt` | Date | Auto |
+| `updatedAt` | Date | Auto |
+
+Indexes: `IDX_device_userId` (userId), `IDX_device_fcmToken` (fcmToken, unique)
+
+### NotificationPreference Entity — `notification_preferences` table:
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `userId` | string | unique, FK → User (CASCADE, OneToOne) |
+| `vibeAlerts` | boolean | default: `true` |
+| `livePerformance` | boolean | default: `true` |
+| `socialCheckins` | boolean | default: `true` |
+| `offerAlerts` | boolean | default: `true` |
+| `weeklyRecap` | boolean | default: `true` |
+| `proximityAlerts` | boolean | default: `true` |
+| `quietHoursStart` | string | nullable, format "HH:mm" |
+| `quietHoursEnd` | string | nullable, format "HH:mm" |
+| `createdAt` | Date | Auto |
+| `updatedAt` | Date | Auto |
+
+---
+
+### Push Module — ✅ COMPLETE (`src/modules/push/`)
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `push.service.ts` | FCM integration, send logic, delivery tracking, mock mode |
+| `push.module.ts` | Imports DevicesModule + Notification entity, exports PushService |
+
+**PushService Methods (implements OnModuleInit):**
+| Method | Description |
+|--------|-------------|
+| `onModuleInit()` | Calls `initializeFirebase()` |
+| `initializeFirebase()` (private) | Reads FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY env vars → `admin.initializeApp()` with cert. Falls back to mock mode if missing |
+| `sendToUser(userId, type, payload)` | 1) Checks preferences via `shouldSendPush`, 2) Gets active devices, 3) Sends FCM to each device |
+| `sendToUsers(userIds[], type, payload)` | Batch send — iterates users, calls `sendToUser` each |
+| `sendToDevice(fcmToken, payload)` (private) | Real FCM send or mock log. Handles image, sound (android + apns). Auto-deactivates invalid tokens |
+| `trackOpen(notificationId)` | Increments `pushStats.opened` |
+| `getStats()` | Returns `{ totalSent, delivered, failed, opened, openRate }` |
+| `isConfigured()` | Returns `this.isFirebaseConfigured` boolean |
+
+**PushPayload Interface:**
+```typescript
+interface PushPayload {
+  title: string;
+  body: string;
+  image?: string;
+  sound?: string;
+  data?: Record<string, string>;
+}
+```
+
+**In-memory Stats:** `{ totalSent, delivered, failed, opened }` — tracked per session
+
+---
+
+### Live Module — ✅ COMPLETE (`src/modules/live/`)
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `live.gateway.ts` | WebSocket gateway on `/live` namespace with JWT auth + room management |
+| `live.controller.ts` | SSE fallback endpoints: feed, venue, map streams |
+| `offer-countdown.service.ts` | 60s interval checks active offers, broadcasts countdown/expired |
+| `live.module.ts` | Exports LiveGateway for use by Business/Admin modules |
+
+**WebSocket Gateway** (`@WebSocketGateway({ namespace: '/live', transports: ['websocket', 'polling'] })`):
+
+**Connection Auth:** JWT token via `client.handshake.query.token` or `client.handshake.auth.token` → `jwt.verify()` → auto-joins `user:{userId}` room
+
+**Tracking Maps:**
+- `connectedUsers: Map<string, Set<string>>` — userId → Set of socketIds
+- `socketToUser: Map<string, string>` — socketId → userId
+- `venueViewers: Map<string, Set<string>>` — venueId → Set of socketIds
+
+**Room Handlers (@SubscribeMessage):**
+| Event | Room Format | Extra |
+|-------|-------------|-------|
+| `join:city` / `leave:city` | `city:{city}` | |
+| `join:venue` / `leave:venue` | `venue:{venueId}` | Tracks/removes viewer in `venueViewers`, emits `VIEWING_COUNT` |
+| `join:map` / `leave:map` | `map:{city}` | |
+| `join:business` / `leave:business` | `business:{venueId}` | |
+
+**Broadcast Methods (called by services):**
+| Method | Events Emitted | Target Rooms |
+|--------|---------------|--------------|
+| `broadcastBusynessUpdate(city, venueId, data)` | `BUSYNESS_UPDATE`, `BUSYNESS_LIVE`, `MARKER_UPDATE`, `STATS_UPDATE` | city, venue, map, business |
+| `broadcastVibeUpdate(venueId, tags)` | `VIBE_UPDATE` | venue |
+| `broadcastNewOffer(city, venueId, data)` | `NEW_OFFER` | city |
+| `broadcastOfferCountdown(venueId, data)` | `OFFER_COUNTDOWN` | venue |
+| `broadcastOfferExpired(venueId, offerId)` | `OFFER_EXPIRED` | venue |
+| `broadcastNewRedemption(venueId, data)` | `NEW_REDEMPTION` | business |
+| `broadcastNewSave(venueId, totalSaves)` | `NEW_SAVE` | business |
+| `broadcastSocialUpdate(venueId, data)` | `SOCIAL_UPDATE` | venue |
+| `sendToUser(userId, event, data)` | Any event | user |
+
+**Stats Methods:**
+- `getConnectionStats()` → `{ activeConnections, uniqueUsers, venueViewers }`
+- `getVenueViewerCount(venueId)` → `number`
+
+**Disconnect handler:** Removes from all maps, broadcasts updated `VIEWING_COUNT` for any venues the socket was viewing.
+
+### SSE Fallback Endpoints — ✅ COMPLETE (`live.controller.ts`):
+| Method | Path | Description |
+|--------|------|-------------|
+| `@Sse` | `GET /live/feed` | City feed stream, heartbeat every 30s with `{ type: 'heartbeat', timestamp, city }` |
+| `@Sse` | `GET /live/venue/:venueId` | Venue detail stream, heartbeat every 30s with `{ type: 'heartbeat', timestamp, venueId, currentlyViewing }` |
+| `@Sse` | `GET /live/map` | Map stream, heartbeat every 30s |
+
+### Offer Countdown — ✅ COMPLETE (`offer-countdown.service.ts`):
+```
+Implements OnModuleInit + OnModuleDestroy
+- setInterval every 60 seconds → checkOfferCountdowns()
+- Loads all active offers with venue relation
+- Parses validTimeEnd as "HH:mm", calculates remaining minutes
+- Broadcasts at thresholds:
+  - 30 min → OFFER_COUNTDOWN
+  - 15 min → OFFER_COUNTDOWN (isUrgent: true)
+  - ≤5 min → OFFER_COUNTDOWN every check
+  - ≤0 min → OFFER_EXPIRED
+```
+
+---
+
+### Business Service Integration — ✅ COMPLETE
+
+**Injected:** `PushService` + `LiveGateway` in `business.service.ts`
+
+| Trigger | Code |
+|---------|------|
+| Status Update | `this.liveGateway.broadcastBusynessUpdate(city, venueId, { level, percentage, ragColor, vibeTags })` |
+| New Offer Created | `this.liveGateway.broadcastNewOffer(city, venueId, { venueName, title })` |
+| Vibe Alert (≥80%) | `this.pushService.sendToUsers(userIds, VIBE_ALERT, { title: '🔥 venue is peaking!', body, data: { deepLink } })` |
+
+### Admin Real-Time Stats — ✅ COMPLETE
+
+**`GET /admin/stats/realtime`** → `getRealTimeStats()`:
+```json
+{
+  "realTimeStats": {
+    "activeWebSocketConnections": number,
+    "uniqueConnectedUsers": number,
+    "pushNotificationsSentToday": number,
+    "pushDelivered": number,
+    "pushFailed": number,
+    "pushOpenRate": string,
+    "registeredDevices": number,
+    "fcmConfigured": boolean
+  }
+}
+```
+
+### Test Fixes — ✅ COMPLETE
+- `business.service.spec.ts` — Added PushService + LiveGateway mock providers
+- `admin.service.spec.ts` — Added Device repository, PushService + LiveGateway mock providers
+- All 37 suites, 339 tests passing after fixes
+
+---
+
+### Implementation Details
+- **Files created**: `devices.controller.ts`, `devices.service.ts`, `devices.module.ts`, `dto/register-device.dto.ts`, `dto/update-notification-preferences.dto.ts`, `dto/index.ts`, `entities/device.entity.ts`, `entities/notification-preference.entity.ts`, `push.service.ts`, `push.module.ts`, `live.gateway.ts`, `live.controller.ts`, `offer-countdown.service.ts`, `live.module.ts`
+- **Files updated**: `business.service.ts` (PushService + LiveGateway calls), `business.module.ts` (PushModule + LiveModule imports), `admin.service.ts` (getRealTimeStats + Device repo), `admin.controller.ts` (GET /admin/stats/realtime), `admin.module.ts` (Device entity + PushModule + LiveModule), `app.module.ts` (DevicesModule + PushModule + LiveModule), `main.ts` (Swagger tags: Devices, Live), `.env.example` (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY), `business.service.spec.ts` (mock providers), `admin.service.spec.ts` (mock providers)
+- **Packages installed**: `firebase-admin@^13.8.0`, `@nestjs/websockets@^11.1.19`, `@nestjs/platform-socket.io@^11.1.19`, `socket.io@^4.8.3`, `@nestjs/event-emitter`
+- **Database**: 2 new tables (devices, notification_preferences), 2 new indexes (IDX_device_userId, IDX_device_fcmToken)
+- **Build**: webpack (`npx nest build --webpack`) → dist/main.js
+- **Tests**: 37 suites, 339 tests, 0 failures

@@ -17,7 +17,7 @@ describe('NotificationsController', () => {
 
   it('findAll returns grouped notifications', async () => {
     const result = await controller.findAll(user);
-    expect(service.findGroupedByUserId).toHaveBeenCalledWith('u-1');
+    expect(service.findGroupedByUserId).toHaveBeenCalledWith('u-1', 1, 20);
     expect(result).toHaveProperty('today');
   });
 

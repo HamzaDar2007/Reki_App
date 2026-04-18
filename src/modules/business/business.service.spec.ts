@@ -16,6 +16,8 @@ import { Notification } from '../notifications/entities/notification.entity';
 import { User } from '../users/entities/user.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusynessLevel } from '../../common/enums';
+import { PushService } from '../push/push.service';
+import { LiveGateway } from '../live/live.gateway';
 
 describe('BusinessService', () => {
   let service: BusinessService;
@@ -63,7 +65,7 @@ describe('BusinessService', () => {
     bizUsersRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     analyticsRepo = { findOne: jest.fn(), find: jest.fn() };
     venuesRepo = { findOne: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
-    offersRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() };
+    offersRepo = { findOne: jest.fn(), find: jest.fn(), findAndCount: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() };
     redemptionsRepo = { find: jest.fn(), createQueryBuilder: jest.fn() };
     busynessRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     vibesRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
@@ -88,6 +90,8 @@ describe('BusinessService', () => {
         { provide: getRepositoryToken(ActivityLog), useValue: activityLogsRepo },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
+        { provide: PushService, useValue: { sendToUser: jest.fn().mockResolvedValue({ sent: true }), sendToUsers: jest.fn().mockResolvedValue({ totalUsers: 0, sent: 0, skipped: 0 }) } },
+        { provide: LiveGateway, useValue: { broadcastBusynessUpdate: jest.fn(), broadcastVibeUpdate: jest.fn(), broadcastNewOffer: jest.fn(), broadcastNewRedemption: jest.fn(), broadcastNewSave: jest.fn() } },
       ],
     }).compile();
 
@@ -207,9 +211,12 @@ describe('BusinessService', () => {
   describe('getVenueOffers', () => {
     it('should return active and past offers', async () => {
       bizUsersRepo.findOne.mockResolvedValue(mockBizUser);
-      offersRepo.find.mockResolvedValue([
-        { id: 'o-1', title: 'Happy Hour', isActive: true, validDays: ['Mon'], validTimeStart: '17:00', validTimeEnd: '19:00', redemptionCount: 5 },
-        { id: 'o-2', title: 'Old Deal', isActive: false, validDays: [], redemptionCount: 0 },
+      offersRepo.findAndCount.mockResolvedValue([
+        [
+          { id: 'o-1', title: 'Happy Hour', isActive: true, validDays: ['Mon'], validTimeStart: '17:00', validTimeEnd: '19:00', redemptionCount: 5 },
+          { id: 'o-2', title: 'Old Deal', isActive: false, validDays: [], redemptionCount: 0 },
+        ],
+        2,
       ]);
 
       const result = await service.getVenueOffers('venue-1', 'biz-1');

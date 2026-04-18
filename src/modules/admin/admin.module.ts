@@ -9,6 +9,12 @@ import { Redemption } from '../offers/entities/redemption.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusinessUser } from '../business/entities/business-user.entity';
+import { GeofenceLog } from '../geofence/entities/geofence-log.entity';
+import { Device } from '../devices/entities/device.entity';
+import { SyncAction } from '../sync/entities/sync-action.entity';
+import { PushModule } from '../push/push.module';
+import { LiveModule } from '../live/live.module';
+import { SyncModule } from '../sync/sync.module';
 
 @Module({
   imports: [
@@ -20,7 +26,13 @@ import { BusinessUser } from '../business/entities/business-user.entity';
       Notification,
       ActivityLog,
       BusinessUser,
+      GeofenceLog,
+      Device,
+      SyncAction,
     ]),
+    PushModule,
+    LiveModule,
+    SyncModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

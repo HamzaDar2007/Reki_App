@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Venue } from './entities/venue.entity';
 import { VenueAnalytics } from '../business/entities/venue-analytics.entity';
-import { haversineDistance, formatDistance, getBusynessColor, generateSocialProof } from '../../common/utils/distance.util';
+import { haversineDistance, formatDistance, getBusynessColor, generateSocialProof, estimateWalkingTime, getNavigationLinks } from '../../common/utils/distance.util';
 
 interface VenueFilters {
   category?: string;
@@ -18,6 +18,7 @@ interface VenueFilters {
   limit?: number;
   userLat?: number;
   userLng?: number;
+  radius?: number;
 }
 
 @Injectable()
@@ -111,6 +112,7 @@ export class VenuesService {
         ...v,
         isLive: this.isVenueLive(v),
         busynessColor: getBusynessColor(busynessPercentage),
+        ragColor: getBusynessColor(busynessPercentage),
         socialProof: generateSocialProof(busynessPercentage),
       };
 
@@ -119,6 +121,8 @@ export class VenuesService {
         const dist = haversineDistance(userLat, userLng, v.lat, v.lng);
         mapped.distance = formatDistance(dist);
         mapped.distanceMiles = Math.round(dist * 10) / 10;
+        mapped.walkingTime = estimateWalkingTime(dist);
+        mapped.navigation = getNavigationLinks(v.lat, v.lng);
       }
 
       // Attach first active offer as activeOffer
@@ -135,8 +139,16 @@ export class VenuesService {
       return mapped;
     });
 
-    // Personalized sorting (if user has preferences)
-    if (userPreferences && (userPreferences.vibes?.length || userPreferences.music?.length)) {
+    // Radius filter — only keep venues within X miles
+    if (filters?.radius && userLat && userLng) {
+      enrichedVenues = enrichedVenues.filter((v) => v.distanceMiles !== undefined && v.distanceMiles <= filters.radius);
+    }
+
+    // Distance sorting
+    if (filters?.sort === 'distance' && userLat && userLng) {
+      enrichedVenues.sort((a, b) => (a.distanceMiles || 999) - (b.distanceMiles || 999));
+    } else if (userPreferences && (userPreferences.vibes?.length || userPreferences.music?.length)) {
+      // Personalized sorting (if user has preferences)
       enrichedVenues = this.sortByPreferences(enrichedVenues, userPreferences);
     }
 
@@ -249,6 +261,13 @@ export class VenuesService {
       const dist = haversineDistance(userLat, userLng, venue.lat, venue.lng);
       enriched.distance = formatDistance(dist);
       enriched.distanceMiles = Math.round(dist * 10) / 10;
+      enriched.walkingTime = estimateWalkingTime(dist);
+      enriched.navigation = getNavigationLinks(venue.lat, venue.lng);
+    }
+
+    // Always include navigation links if venue has coordinates
+    if (venue.lat && venue.lng && !enriched.navigation) {
+      enriched.navigation = getNavigationLinks(venue.lat, venue.lng);
     }
 
     return enriched;
@@ -256,25 +275,35 @@ export class VenuesService {
 
   /**
    * Get map marker data for all venues.
+   * Supports viewport bounds filtering and user distance.
    */
-  async getMapMarkers(city?: string, userLat?: number, userLng?: number): Promise<any[]> {
+  async getMapMarkers(
+    city?: string,
+    userLat?: number,
+    userLng?: number,
+    bounds?: { swLat: number; swLng: number; neLat: number; neLng: number },
+  ): Promise<any[]> {
     const venues = await this.venuesRepository.find({
       where: { city: city || 'Manchester' },
-      relations: ['busyness', 'vibe'],
+      relations: ['busyness', 'vibe', 'offers'],
     });
 
-    return venues.map((v) => {
+    let markers = venues.map((v) => {
+      const busynessPercentage = v.busyness?.percentage || 0;
+      const hasActiveOffer = v.offers?.some((o) => o.isActive) || false;
       const marker: any = {
         venueId: v.id,
         name: v.name,
         lat: v.lat,
         lng: v.lng,
         busynessLevel: v.busyness?.level || 'quiet',
-        busynessPercentage: v.busyness?.percentage || 0,
-        busynessColor: getBusynessColor(v.busyness?.percentage || 0),
+        busynessPercentage,
+        busynessColor: getBusynessColor(busynessPercentage),
+        ragColor: getBusynessColor(busynessPercentage),
         vibeLabel: v.vibe?.tags?.[0] || '',
         category: v.category,
         isLive: this.isVenueLive(v),
+        hasActiveOffer,
       };
 
       if (userLat && userLng && v.lat && v.lng) {
@@ -285,6 +314,16 @@ export class VenuesService {
 
       return marker;
     });
+
+    // Filter by viewport bounds if provided
+    if (bounds) {
+      markers = markers.filter((m) =>
+        m.lat >= bounds.swLat && m.lat <= bounds.neLat &&
+        m.lng >= bounds.swLng && m.lng <= bounds.neLng,
+      );
+    }
+
+    return markers;
   }
 
   /**

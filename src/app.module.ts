@@ -20,6 +20,11 @@ import { BusinessModule } from './modules/business/business.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { DemoModule } from './modules/demo/demo.module';
+import { GeofenceModule } from './modules/geofence/geofence.module';
+import { DevicesModule } from './modules/devices/devices.module';
+import { PushModule } from './modules/push/push.module';
+import { LiveModule } from './modules/live/live.module';
+import { SyncModule } from './modules/sync/sync.module';
 import { SeedModule } from './seed/seed.module';
 
 @Module({
@@ -66,6 +71,11 @@ import { SeedModule } from './seed/seed.module';
     AdminModule,
     AuditModule,
     DemoModule,
+    GeofenceModule,
+    DevicesModule,
+    PushModule,
+    LiveModule,
+    SyncModule,
     SeedModule,
   ],
   controllers: [AppController],

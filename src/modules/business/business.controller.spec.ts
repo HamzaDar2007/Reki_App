@@ -62,7 +62,7 @@ describe('BusinessController', () => {
 
   it('getVenueOffers', async () => {
     await controller.getVenueOffers('v-1', user);
-    expect(service.getVenueOffers).toHaveBeenCalledWith('v-1', 'u-1');
+    expect(service.getVenueOffers).toHaveBeenCalledWith('v-1', 'u-1', 1, 20);
   });
 
   it('createOffer', async () => {

@@ -11,23 +11,27 @@ export class NotificationsService {
     private notificationsRepository: Repository<Notification>,
   ) {}
 
-  async findByUserId(userId: string): Promise<Notification[]> {
-    return this.notificationsRepository.find({
+  async findByUserId(userId: string, page = 1, limit = 20): Promise<{ items: Notification[]; total: number }> {
+    const [items, total] = await this.notificationsRepository.findAndCount({
       where: { userId },
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+    return { items, total };
   }
 
   /**
    * Get notifications grouped by time period:
    * Today / Yesterday / Earlier
    */
-  async findGroupedByUserId(userId: string): Promise<{
+  async findGroupedByUserId(userId: string, page = 1, limit = 20): Promise<{
     today: Notification[];
     yesterday: Notification[];
     earlier: Notification[];
+    pagination: { page: number; limit: number; total: number; pages: number; hasNext: boolean; hasPrev: boolean };
   }> {
-    const all = await this.findByUserId(userId);
+    const { items: all, total } = await this.findByUserId(userId, page, limit);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterdayStart = new Date(todayStart);
@@ -48,7 +52,19 @@ export class NotificationsService {
       }
     }
 
-    return { today, yesterday, earlier };
+    return {
+      today,
+      yesterday,
+      earlier,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
   }
 
   /**

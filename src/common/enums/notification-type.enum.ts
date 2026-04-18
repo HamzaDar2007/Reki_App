@@ -6,4 +6,5 @@ export enum NotificationType {
   WELCOME = 'welcome',
   WEEKLY_RECAP = 'weekly_recap',
   TICKET_SECURED = 'ticket_secured',
+  PROXIMITY_OFFER = 'proximity_offer',
 }
