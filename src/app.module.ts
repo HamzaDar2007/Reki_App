@@ -32,6 +32,7 @@ import { SeedModule } from './seed/seed.module';
     // Config
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
       load: [appConfig, databaseConfig],
     }),
 
@@ -59,6 +60,7 @@ import { SeedModule } from './seed/seed.module';
     }),
 
     // Feature modules
+    SyncModule,
     AuthModule,
     UsersModule,
     VenuesModule,
@@ -75,7 +77,6 @@ import { SeedModule } from './seed/seed.module';
     DevicesModule,
     PushModule,
     LiveModule,
-    SyncModule,
     SeedModule,
   ],
   controllers: [AppController],

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { JwtAuthGuard } from '../auth/guards';
@@ -16,7 +16,7 @@ export class OffersController {
   @Get(':id')
   @CacheTTL(120)
   @ApiOperation({ summary: 'Get offer detail by ID' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const offer = await this.offersService.findById(id);
     if (!offer) {
       throw new NotFoundException({ code: ErrorCode.OFFER_NOT_FOUND, message: 'Offer not found' });
@@ -51,7 +51,7 @@ export class OffersController {
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Claim offer — generates voucher code + QR' })
-  async claim(@Param('id') id: string, @CurrentUser() user: User) {
+  async claim(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     const offer = await this.offersService.findById(id);
     if (!offer) {
       throw new NotFoundException({ code: ErrorCode.OFFER_NOT_FOUND, message: 'Offer not found' });
@@ -89,7 +89,7 @@ export class OffersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Redeem a claimed offer' })
   async redeem(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { voucherCode: string },
     @CurrentUser() user: User,
   ) {
@@ -133,7 +133,7 @@ export class OffersController {
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Generate Apple Wallet pass for claimed offer' })
-  async walletPass(@Param('id') id: string, @CurrentUser() user: User) {
+  async walletPass(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     // Apple Wallet .pkpass generation requires Apple Developer certs
     // Returning pass data structure that can be used when certs are configured
     const offer = await this.offersService.findById(id);

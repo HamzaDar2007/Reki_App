@@ -45,6 +45,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
         Sentry.captureException(exception);
       });
       this.logger.error(`${request?.method} ${request?.url} ${status} — ${message}`);
+      if (exception instanceof Error) {
+        this.logger.error(exception.stack);
+      }
     }
 
     response.status(status).json({

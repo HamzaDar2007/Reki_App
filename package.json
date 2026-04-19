@@ -14,9 +14,10 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
-    "migration:generate": "npm run typeorm -- migration:generate -d src/config/database.config.ts",
-    "migration:run": "npm run typeorm -- migration:run -d src/config/database.config.ts",
-    "migration:revert": "npm run typeorm -- migration:revert -d src/config/database.config.ts"
+    "migration:generate": "npm run typeorm -- migration:generate src/migrations/Migration -d src/config/data-source.ts",
+    "migration:run": "npm run typeorm -- migration:run -d src/config/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/config/data-source.ts",
+    "migration:show": "npm run typeorm -- migration:show -d src/config/data-source.ts"
   },
   "keywords": [],
   "author": "",

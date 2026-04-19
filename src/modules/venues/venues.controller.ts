@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Post, NotFoundException, Req } from '@nestjs/common';
+import { Controller, Get, Param, Query, Post, NotFoundException, Req, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
 import { ErrorCode } from '../../common/enums';
@@ -138,7 +138,7 @@ export class VenuesController {
   @ApiQuery({ name: 'lat', required: false, type: Number })
   @ApiQuery({ name: 'lng', required: false, type: Number })
   async findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
   ) {
@@ -159,7 +159,7 @@ export class VenuesController {
   @Post(':id/view')
   @NoCache()
   @ApiOperation({ summary: 'Track venue view' })
-  async trackView(@Param('id') id: string) {
+  async trackView(@Param('id', ParseUUIDPipe) id: string) {
     await this.venuesService.trackView(id);
     return { success: true };
   }

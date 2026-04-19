@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, Min, Max } from 'class-validator';
 
 export class GeofenceCheckDto {
   @ApiProperty({ example: 53.4808, description: 'User latitude' })
@@ -40,9 +40,11 @@ export class UpdateLocationDto {
 
 export class UpdateLocationConsentDto {
   @ApiProperty({ example: true })
+  @IsBoolean()
   locationEnabled: boolean;
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()
+  @IsBoolean()
   backgroundLocationEnabled?: boolean;
 }

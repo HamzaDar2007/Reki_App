@@ -9,5 +9,7 @@ export default registerAs('database', () => ({
   database: process.env.DB_NAME || 'reki_db',
   autoLoadEntities: true,
   synchronize: process.env.NODE_ENV !== 'production',
+  migrationsRun: process.env.NODE_ENV === 'production',
+  migrations: ['dist/migrations/*{.ts,.js}'],
   logging: process.env.NODE_ENV === 'development',
 }));

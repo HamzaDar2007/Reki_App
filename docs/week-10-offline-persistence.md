@@ -1,5 +1,10 @@
 # Week 10 – Offline Support & Data Persistence (Phase 2)
 
+> **Status: ✅ COMPLETE** — All 12 deliverables implemented, Sync module + SyncAction entity, CacheHeaders interceptor, migration setup
+> **Build:** `npx nest build --webpack` → Clean (no errors)
+> **Tests:** 37 suites, 339 tests, 0 failures (SyncService mock added to AdminService spec)
+> **New Module:** Sync (controller, service, 1 entity, 3 DTOs)
+
 > ⚠️ **Note**: Phase 2 ki screens abhi client ne provide nahi ki hain. Yeh doc sirf backend tasks cover karta hai jo document.md mein defined hain. Jab Phase 2 screens milengi, tab screen-level mapping add hoga.
 
 ## Goal
@@ -300,6 +305,184 @@ GET /admin/stats → includes:
 10. ✅ Admin offline monitoring stats
 11. ✅ 95%+ read operations work offline
 12. ✅ Sync success rate > 99%
+
+---
+
+## Implementation Status (Updated: 2026-04-18)
+
+### Sync Module — ✅ COMPLETE (`src/modules/sync/`)
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `sync.controller.ts` | 7 endpoints: sync queue, status, delta sync (venues/notifications/offers), state backup/restore |
+| `sync.service.ts` | Full sync logic: queue processing, conflict resolution, delta sync, state persistence, admin stats |
+| `sync.module.ts` | Imports 8 entities (SyncAction, Venue, Busyness, Vibe, Offer, Notification, User, VenueAnalytics), exports SyncService |
+| `entities/sync-action.entity.ts` | SyncAction entity — offline action tracking with conflict data |
+| `dto/sync.dto.ts` | SyncActionDto, SubmitSyncQueueDto, UserStateDto |
+| `dto/index.ts` | DTO barrel export |
+
+**Sync Controller Endpoints:**
+| Method | Path | Guards | Decorator | Description |
+|--------|------|--------|-----------|-------------|
+| `POST` | `/sync/queue` | JwtAuth, NoGuest | `@NoCache()` | Submit offline action queue for processing |
+| `GET` | `/sync/status` | JwtAuth | `@NoCache()` | Check sync status for a device (pending, conflicts) |
+| `GET` | `/venues/sync` | JwtAuth | `@CacheTTL(120)` | Delta sync — venues changed since timestamp |
+| `GET` | `/notifications/sync` | JwtAuth, NoGuest | `@CacheTTL(60)` | Delta sync — notifications since timestamp |
+| `GET` | `/offers/sync` | JwtAuth | `@CacheTTL(120)` | Delta sync — offers changed since timestamp |
+| `PUT` | `/users/state` | JwtAuth, NoGuest | `@NoCache()` | Backup user app state (preferences, filters, savedVenues) |
+| `GET` | `/users/state` | JwtAuth, NoGuest | `@CacheTTL(3600)` | Restore user app state |
+
+**Sync Service Methods:**
+| Method | Description |
+|--------|-------------|
+| `processSyncQueue(userId, deviceId, actions[])` | Iterates offline actions, processes each by type, returns results array with status per action |
+| `processBusynessUpdate()` | Conflict detection: compares offlineTimestamp vs server.lastUpdated. If older → CONFLICT with serverData + options. If newer → ACCEPT, updates busyness level + percentage |
+| `processVibeUpdate()` | Same last-write-wins pattern. Conflict → returns server vibes/tags. Accept → replaces vibe tags |
+| `processOfferToggle()` | Checks offer exists + not expired. If gone → REJECTED. Otherwise → toggles isActive |
+| `processNotificationRead()` | Idempotent — always accepts, marks notification as read |
+| `processVenueSave()` | Always accepts — adds/removes venueId from user.savedVenues |
+| `processVenueView()` | Always accepts — increments VenueAnalytics.totalViews for today |
+| `getSyncStatus(deviceId)` | Returns pending count, lastSyncAt, conflicts list (last 10) |
+| `getVenuesSyncSince(since)` | QueryBuilder with LEFT JOINs on busyness, vibe, offers. Filters by updatedAt/lastUpdated >= since. Returns updated venues + deleted IDs |
+| `getNotificationsSyncSince(userId, since)` | MoreThanOrEqual on createdAt. Returns up to 100 notifications |
+| `getOffersSyncSince(since)` | Splits into updated (active) + expired lists. Includes venue relation |
+| `saveUserState(userId, state)` | Merges preferences, savedVenues, appState (lastFilters, lastSyncAt, notificationPreferences) into User entity |
+| `getUserState(userId)` | Restores full state from user.preferences, savedVenues, appState JSONB |
+| `getOfflineStats()` | Admin stats: totalSyncActions, pending, successful, conflictsToday, rejectedToday, syncSuccessRate |
+| `saveSyncAction()` (private) | Persists SyncAction record with clientActionId, status, conflictMessage, serverData |
+
+### SyncAction Entity — ✅ COMPLETE (`sync_actions` table)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `clientActionId` | string | Client-provided local UUID |
+| `deviceId` | string | Device that created the action |
+| `userId` | string | User who performed the action |
+| `type` | enum (SyncActionType) | BUSYNESS_UPDATE, VIBE_UPDATE, OFFER_TOGGLE, NOTIFICATION_READ, VENUE_SAVE, VENUE_VIEW |
+| `status` | enum (SyncActionStatus) | SUCCESS, CONFLICT, REJECTED, PENDING (default) |
+| `data` | jsonb | Action payload data |
+| `venueId` | string | nullable |
+| `notificationId` | string | nullable |
+| `offerId` | string | nullable |
+| `offlineTimestamp` | Date | When action was created offline |
+| `conflictMessage` | string | nullable — human-readable conflict description |
+| `serverData` | jsonb | nullable — server state at conflict time |
+| `conflictOptions` | text (simple-array) | nullable — e.g. ['keep_server', 'override_with_mine'] |
+| `syncedAt` | Date | Auto-set on creation |
+
+Indexes: `IDX_sync_deviceId`, `IDX_sync_userId`, `IDX_sync_status`
+
+### CacheHeaders Interceptor — ✅ COMPLETE (`src/common/interceptors/cache-headers.interceptor.ts`)
+
+**How it works:**
+1. Registered globally in `main.ts` via `app.useGlobalInterceptors(new CacheHeadersInterceptor(new Reflector()))`
+2. Reads `@CacheTTL(seconds)` or `@NoCache()` metadata from route handlers via Reflector
+3. For cacheable responses: sets `Cache-Control: max-age=TTL`, `ETag` (MD5 of JSON body), `Last-Modified`, `X-Data-Freshness: live`
+4. For `@NoCache()` routes: sets `Cache-Control: no-store, no-cache` + `X-Data-Freshness: live`
+5. Checks `If-None-Match` header → returns 304 Not Modified if ETag matches (saves bandwidth)
+
+**Decorators exported:**
+- `CacheTTL(seconds)` — sets cache duration on a route
+- `NoCache()` — disables caching for mutation endpoints
+
+### CacheTTL Applied to Controllers:
+
+| Controller | Endpoint | TTL (seconds) | Decorator |
+|------------|----------|:---:|-----------|
+| Venues | `GET /venues` | 120 | `@CacheTTL(120)` |
+| Venues | `GET /venues/search` | 60 | `@CacheTTL(60)` |
+| Venues | `GET /venues/filter-options` | 3600 | `@CacheTTL(3600)` |
+| Venues | `GET /venues/trending` | 60 | `@CacheTTL(60)` |
+| Venues | `GET /venues/map-markers` | 120 | `@CacheTTL(120)` |
+| Venues | `GET /venues/:id` | 300 | `@CacheTTL(300)` |
+| Venues | `POST /venues/:id/view` | — | `@NoCache()` |
+| Offers | `GET /offers/:id` | 120 | `@CacheTTL(120)` |
+| Offers | `POST /offers/:id/claim` | — | `@NoCache()` |
+| Offers | `POST /offers/:id/redeem` | — | `@NoCache()` |
+| Notifications | `GET /notifications` | 60 | `@CacheTTL(60)` |
+| Notifications | `PUT /notifications/:id/read` | — | `@NoCache()` |
+| Notifications | `PUT /notifications/read-all` | — | `@NoCache()` |
+| Tags | `GET /tags` | 86400 | `@CacheTTL(86400)` |
+| Tags | `GET /tags/vibes` | 86400 | `@CacheTTL(86400)` |
+| Tags | `GET /tags/music` | 86400 | `@CacheTTL(86400)` |
+| Tags | `GET /tags/search` | 3600 | `@CacheTTL(3600)` |
+| Sync | `GET /users/state` | 3600 | `@CacheTTL(3600)` |
+| Sync | `GET /venues/sync` | 120 | `@CacheTTL(120)` |
+| Sync | `GET /notifications/sync` | 60 | `@CacheTTL(60)` |
+| Sync | `GET /offers/sync` | 120 | `@CacheTTL(120)` |
+
+### Offline Error Codes — ✅ COMPLETE (`src/common/enums/error-codes.enum.ts`)
+
+5 new codes added:
+```
+OFFLINE = 'OFFLINE'
+SYNC_REQUIRED = 'SYNC_REQUIRED'
+SYNC_CONFLICT = 'SYNC_CONFLICT'
+ACTION_QUEUED = 'ACTION_QUEUED'
+FEATURE_UNAVAILABLE_OFFLINE = 'FEATURE_UNAVAILABLE_OFFLINE'
+```
+
+### User Entity — ✅ UPDATED (`src/modules/users/entities/user.entity.ts`)
+
+New column added:
+```
+@Column({ type: 'jsonb', nullable: true })
+appState: Record<string, any>;
+```
+Stores: lastFilters, lastSyncAt, notificationPreferences
+
+### Admin Offline Stats — ✅ COMPLETE
+
+**Files updated:**
+- `admin.controller.ts` → added `GET /admin/stats/offline`
+- `admin.service.ts` → added `getOfflineStats()` (delegates to `syncService.getOfflineStats()`)
+- `admin.module.ts` → added `SyncAction` entity import + `SyncModule` import
+
+**Stats returned:**
+```json
+{
+  "totalSyncActions": 0,
+  "pendingSyncActions": 0,
+  "successfulSyncs": 0,
+  "conflictsToday": 0,
+  "rejectedToday": 0,
+  "syncSuccessRate": "0.0%",
+  "avgSyncDelay": "0 minutes"
+}
+```
+
+### Migration Setup — ✅ COMPLETE
+
+**Files created:**
+| File | Purpose |
+|------|---------|
+| `src/config/data-source.ts` | Standalone DataSource for TypeORM CLI — entities glob + migrations path |
+| `src/migrations/1776535397596-Migration.ts` | Auto-generated migration: sync_actions table, geofence tables, devices/notification_preferences tables, user location + appState columns, venue lat/lng index, proximity_offer enum value |
+
+**Database config updated** (`src/config/database.config.ts`):
+- `synchronize: true` in dev, `false` in production
+- `migrationsRun: true` in production (auto-runs pending migrations on app start)
+- `migrations: ['dist/migrations/*{.ts,.js}']` path configured
+
+**Migration scripts** (package.json):
+```
+npm run migration:generate  → Generate new migration from entity diff
+npm run migration:run       → Run all pending migrations
+npm run migration:revert    → Revert last migration
+npm run migration:show      → Show migration status
+```
+
+### Wiring & Integration — ✅ COMPLETE
+
+**Files updated:**
+- `app.module.ts` → `SyncModule` added to imports array
+- `main.ts` → `CacheHeadersInterceptor` registered globally + `'Sync'` Swagger tag added
+- `admin.service.spec.ts` → SyncService mock provider added (fixes test injection)
+
+### Test Impact:
+- **37 suites, 339 tests** — ALL PASSING (no new test files added for Sync module, but admin spec updated with SyncService mock)
 
 ---
 

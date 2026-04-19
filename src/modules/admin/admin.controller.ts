@@ -1,10 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { PushService } from '../push/push.service';
 import { JwtAuthGuard } from '../auth/guards';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
-import { Role } from '../../common/enums';
+import { Role, NotificationType } from '../../common/enums';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -12,7 +13,10 @@ import { Role } from '../../common/enums';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly pushService: PushService,
+  ) {}
 
   @Get('stats')
   @ApiOperation({ summary: 'Get platform overview stats (admin only)' })
@@ -120,5 +124,26 @@ export class AdminController {
   @ApiOperation({ summary: 'Get offline sync stats (admin only)' })
   async getOfflineStats() {
     return this.adminService.getOfflineStats();
+  }
+
+  @Post('test-push')
+  @ApiOperation({ summary: 'Send a test push notification to a user (admin only)' })
+  async testPush(
+    @Body() body: { userId: string; title?: string; body?: string },
+  ) {
+    const result = await this.pushService.sendToUser(
+      body.userId,
+      NotificationType.VIBE_ALERT,
+      {
+        title: body.title || '🔔 REKI Test Notification',
+        body: body.body || 'This is a test push from REKI admin panel',
+        data: { type: 'TEST', timestamp: new Date().toISOString() },
+      },
+    );
+    return {
+      ...result,
+      firebaseConfigured: this.pushService.isConfigured(),
+      pushStats: this.pushService.getStats(),
+    };
   }
 }
