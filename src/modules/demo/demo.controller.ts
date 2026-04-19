@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { DemoService } from './demo.service';
 import { SimulateDemoDto, SimulateTimeDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards';

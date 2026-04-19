@@ -1,4 +1,4 @@
-import { Injectable, Inject, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
@@ -10,7 +10,6 @@ import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusinessUser } from '../business/entities/business-user.entity';
 import { GeofenceLog } from '../geofence/entities/geofence-log.entity';
 import { Device } from '../devices/entities/device.entity';
-import { SyncAction } from '../sync/entities/sync-action.entity';
 import { paginate } from '../../common/dto';
 import { PushService } from '../push/push.service';
 import { LiveGateway } from '../live/live.gateway';

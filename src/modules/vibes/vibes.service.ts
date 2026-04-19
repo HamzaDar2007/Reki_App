@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vibe } from './entities/vibe.entity';
@@ -12,6 +12,27 @@ export class VibesService {
 
   async findByVenueId(venueId: string): Promise<Vibe | null> {
     return this.vibesRepository.findOne({ where: { venueId } });
+  }
+
+  /**
+   * Submit a user "vibe check" (1-5). Updates running average vibeCheckScore
+   * and increments responseCount. Powers the social proof shown on venue detail.
+   */
+  async submitVibeCheck(venueId: string, score: number): Promise<Vibe> {
+    const vibe = await this.vibesRepository.findOne({ where: { venueId } });
+    if (!vibe) {
+      throw new NotFoundException(`No vibe record found for venue ${venueId}`);
+    }
+
+    const prevScore = Number(vibe.vibeCheckScore) || 0;
+    const prevCount = vibe.responseCount || 0;
+    const newCount = prevCount + 1;
+    const newAvg = (prevScore * prevCount + score) / newCount;
+
+    vibe.vibeCheckScore = Math.round(newAvg * 10) / 10; // keep 1 decimal place
+    vibe.responseCount = newCount;
+
+    return this.vibesRepository.save(vibe);
   }
 
   /**

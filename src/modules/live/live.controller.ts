@@ -1,4 +1,4 @@
-import { Controller, Sse, Query, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Sse, Query, UseGuards, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { Observable, interval, map } from 'rxjs';
 import { JwtAuthGuard } from '../auth/guards';

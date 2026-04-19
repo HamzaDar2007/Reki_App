@@ -27,6 +27,12 @@ export class PushService implements OnModuleInit {
     opened: 0,
   };
 
+  // Dedupe: suppress duplicate (userId, type, refId) pushes within window.
+  // Spec (Week 9): "Check user hasn't been notified for same venue/event in last 1 hour".
+  private readonly dedupeWindowMs = 60 * 60 * 1000; // 1 hour
+  private readonly dedupeCache = new Map<string, number>(); // key -> expiresAt
+  private lastDedupeSweep = 0;
+
   constructor(
     private readonly devicesService: DevicesService,
     @InjectRepository(Notification)
@@ -81,18 +87,61 @@ export class PushService implements OnModuleInit {
       return { sent: false, reason: 'User preferences or quiet hours blocked' };
     }
 
-    // 2. Get active devices
+    // 2. Dedupe check — suppress same (user, type, refId) within 1h
+    const refId =
+      payload.data?.venueId ||
+      payload.data?.offerId ||
+      payload.data?.redemptionId ||
+      payload.data?.notificationId ||
+      '';
+    const dedupeKey = `${userId}:${notificationType}:${refId}`;
+    if (this.isDuplicate(dedupeKey)) {
+      this.logger.debug(`Push deduped: ${dedupeKey}`);
+      return { sent: false, reason: 'Duplicate within dedupe window' };
+    }
+
+    // 3. Get active devices
     const devices = await this.devicesService.getActiveDevicesByUserId(userId);
     if (devices.length === 0) {
       return { sent: false, reason: 'No active devices' };
     }
 
-    // 3. Send to each device
+    // 4. Send to each device
     for (const device of devices) {
       await this.sendToDevice(device.fcmToken, payload);
     }
 
+    // 5. Mark dedupe key as recently sent
+    this.markSent(dedupeKey);
+
     return { sent: true };
+  }
+
+  /**
+   * Returns true if this (userId, type, refId) key was sent within the dedupe window.
+   */
+  private isDuplicate(key: string): boolean {
+    this.sweepDedupeCacheIfNeeded();
+    const expiresAt = this.dedupeCache.get(key);
+    if (!expiresAt) return false;
+    if (Date.now() > expiresAt) {
+      this.dedupeCache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  private markSent(key: string): void {
+    this.dedupeCache.set(key, Date.now() + this.dedupeWindowMs);
+  }
+
+  private sweepDedupeCacheIfNeeded(): void {
+    const now = Date.now();
+    if (now - this.lastDedupeSweep < 5 * 60 * 1000) return; // sweep at most every 5 min
+    this.lastDedupeSweep = now;
+    for (const [key, expiresAt] of this.dedupeCache.entries()) {
+      if (now > expiresAt) this.dedupeCache.delete(key);
+    }
   }
 
   /**

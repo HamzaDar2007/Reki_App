@@ -4,7 +4,6 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -152,8 +151,8 @@ export class BusinessService {
 
     return {
       success: true,
-      message: 'Application submitted. We\'ll review and get back to you.',
-      status: 'pending',
+      message: 'Business registered and approved. You can now log in.',
+      status: 'approved',
     };
   }
 

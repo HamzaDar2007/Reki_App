@@ -6,7 +6,6 @@ import {
   Body,
   Query,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
