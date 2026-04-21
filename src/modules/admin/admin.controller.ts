@@ -1,5 +1,17 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiParam,
+  ApiBody,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+} from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { PushService } from '../push/push.service';
 import { JwtAuthGuard } from '../auth/guards';
@@ -9,6 +21,8 @@ import { Role, NotificationType } from '../../common/enums';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+@ApiForbiddenResponse({ description: 'Admin role required' })
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
@@ -20,12 +34,14 @@ export class AdminController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Get platform overview stats (admin only)' })
+  @ApiOkResponse({ description: 'Platform-wide counters (users, venues, offers, redemptions)' })
   async getStats() {
     return this.adminService.getStats();
   }
 
   @Get('stats/location')
   @ApiOperation({ summary: 'Get location-related stats (admin only)' })
+  @ApiOkResponse({ description: 'Geofence + location-sharing stats' })
   async getLocationStats() {
     return this.adminService.getLocationStats();
   }
@@ -34,6 +50,7 @@ export class AdminController {
   @ApiOperation({ summary: 'List all users (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated user list' })
   async getUsers(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getUsers(
       page ? Number(page) : 1,
@@ -43,6 +60,9 @@ export class AdminController {
 
   @Get('users/:id/activity')
   @ApiOperation({ summary: 'Get user activity — login history, redemptions (admin only)' })
+  @ApiParam({ name: 'id', description: 'User UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'User activity detail' })
+  @ApiNotFoundResponse({ description: 'User not found' })
   async getUserActivity(@Param('id') id: string) {
     const result = await this.adminService.getUserActivity(id);
     if (!result) {
@@ -57,6 +77,7 @@ export class AdminController {
   @ApiOperation({ summary: 'List all venues with status (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated venue list with admin status' })
   async getVenues(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getVenues(
       page ? Number(page) : 1,
@@ -66,6 +87,8 @@ export class AdminController {
 
   @Get('venues/:id/logs')
   @ApiOperation({ summary: 'Get busyness/vibe update logs for a venue (admin only)' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Time-series logs of status updates' })
   async getVenueLogs(@Param('id') id: string) {
     return this.adminService.getVenueLogs(id);
   }
@@ -74,6 +97,7 @@ export class AdminController {
   @ApiOperation({ summary: 'List all offers across venues (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated cross-venue offer list' })
   async getAllOffers(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getAllOffers(
       page ? Number(page) : 1,
@@ -85,6 +109,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Get redemption logs (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated redemption log entries' })
   async getRedemptionLogs(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getRedemptionLogs(
       page ? Number(page) : 1,
@@ -96,6 +121,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Get all activity logs (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated activity/audit logs' })
   async getActivityLogs(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getActivityLogs(
       page ? Number(page) : 1,
@@ -107,6 +133,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Get all notification logs (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated notification dispatch log' })
   async getNotifications(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getNotifications(
       page ? Number(page) : 1,
@@ -116,18 +143,22 @@ export class AdminController {
 
   @Get('stats/realtime')
   @ApiOperation({ summary: 'Get real-time stats — WebSocket connections, push analytics (admin only)' })
+  @ApiOkResponse({ description: 'WS connections + push dispatch stats' })
   async getRealTimeStats() {
     return this.adminService.getRealTimeStats();
   }
 
   @Get('stats/offline')
   @ApiOperation({ summary: 'Get offline sync stats (admin only)' })
+  @ApiOkResponse({ description: 'Sync queue + delta sync aggregate stats' })
   async getOfflineStats() {
     return this.adminService.getOfflineStats();
   }
 
   @Post('test-push')
   @ApiOperation({ summary: 'Send a test push notification to a user (admin only)' })
+  @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, body: { type: 'string' } }, required: ['userId'] } })
+  @ApiCreatedResponse({ description: 'Test push dispatched (or queued if Firebase not configured)' })
   async testPush(
     @Body() body: { userId: string; title?: string; body?: string },
   ) {

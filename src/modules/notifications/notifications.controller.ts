@@ -1,5 +1,14 @@
 import { Controller, Get, Put, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+} from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards';
 import { NoGuestGuard } from '../../common/guards';
@@ -9,6 +18,8 @@ import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.inter
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+@ApiForbiddenResponse({ description: 'Guest users cannot access notifications' })
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, NoGuestGuard)
 export class NotificationsController {
@@ -19,6 +30,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Get notifications grouped by Today/Yesterday/Earlier' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Notifications grouped by time with unreadCount' })
   async findAll(
     @CurrentUser() user: User,
     @Query('page') page?: string,
@@ -34,6 +46,8 @@ export class NotificationsController {
   @Put(':id/read')
   @NoCache()
   @ApiOperation({ summary: 'Mark a notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Notification marked as read' })
   async markAsRead(@Param('id') id: string) {
     await this.notificationsService.markAsRead(id);
     return { success: true };
@@ -42,6 +56,7 @@ export class NotificationsController {
   @Put('read-all')
   @NoCache()
   @ApiOperation({ summary: 'Mark all notifications as read' })
+  @ApiOkResponse({ description: 'All notifications for the user marked as read' })
   async markAllAsRead(@CurrentUser() user: User) {
     await this.notificationsService.markAllAsRead(user.id);
     return { success: true };

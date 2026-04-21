@@ -1,5 +1,17 @@
 import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+} from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { JwtAuthGuard } from '../auth/guards';
 import { NoGuestGuard } from '../../common/guards';
@@ -16,6 +28,9 @@ export class OffersController {
   @Get(':id')
   @CacheTTL(120)
   @ApiOperation({ summary: 'Get offer detail by ID' })
+  @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Offer detail with status + availability' })
+  @ApiNotFoundResponse({ description: 'Offer not found' })
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const offer = await this.offersService.findById(id);
     if (!offer) {
@@ -51,6 +66,12 @@ export class OffersController {
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Claim offer — generates voucher code + QR' })
+  @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'Voucher code + QR data returned' })
+  @ApiBadRequestResponse({ description: 'Offer not valid now (outside valid hours/days)' })
+  @ApiNotFoundResponse({ description: 'Offer not found' })
+  @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+  @ApiForbiddenResponse({ description: 'Guest users cannot claim offers' })
   async claim(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     const offer = await this.offersService.findById(id);
     if (!offer) {
@@ -88,6 +109,13 @@ export class OffersController {
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Redeem a claimed offer' })
+  @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
+  @ApiBody({ schema: { type: 'object', properties: { voucherCode: { type: 'string', example: 'REKI-ABC123' } }, required: ['voucherCode'] } })
+  @ApiOkResponse({ description: 'Offer redeemed — transactionId + savingValue returned' })
+  @ApiBadRequestResponse({ description: 'Voucher does not belong to you, or already redeemed' })
+  @ApiNotFoundResponse({ description: 'Offer or voucher not found' })
+  @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+  @ApiForbiddenResponse({ description: 'Guest users cannot redeem offers' })
   async redeem(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { voucherCode: string },
@@ -133,6 +161,12 @@ export class OffersController {
   @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Generate Apple Wallet pass for claimed offer' })
+  @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'Apple Wallet pass data structure returned' })
+  @ApiBadRequestResponse({ description: 'You must claim this offer first' })
+  @ApiNotFoundResponse({ description: 'Offer not found' })
+  @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+  @ApiForbiddenResponse({ description: 'Guest users cannot generate wallet passes' })
   async walletPass(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     // Apple Wallet .pkpass generation requires Apple Developer certs
     // Returning pass data structure that can be used when certs are configured

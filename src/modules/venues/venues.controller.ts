@@ -1,5 +1,13 @@
 import { Controller, Get, Param, Query, Post, NotFoundException, Req, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiParam,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+} from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
 import { ErrorCode } from '../../common/enums';
 import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
@@ -25,6 +33,7 @@ export class VenuesController {
   @ApiQuery({ name: 'lat', required: false, type: Number, description: 'User latitude for distance calc' })
   @ApiQuery({ name: 'lng', required: false, type: Number, description: 'User longitude for distance calc' })
   @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Max distance in miles (Near Me filter)' })
+  @ApiOkResponse({ description: 'Paginated venue list with busyness, vibe, and RAG indicators' })
   async findAll(
     @Query('city') city?: string,
     @Query('category') category?: string,
@@ -74,6 +83,7 @@ export class VenuesController {
   @ApiOperation({ summary: 'Search venues by name, area, or tags' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
   @ApiQuery({ name: 'city', required: false })
+  @ApiOkResponse({ description: 'Matching venues with count' })
   async search(@Query('q') q: string, @Query('city') city?: string) {
     const venues = await this.venuesService.search(q, city);
     return { venues, count: venues.length };
@@ -83,6 +93,7 @@ export class VenuesController {
   @CacheTTL(3600)
   @ApiOperation({ summary: 'Get available filter options for a city' })
   @ApiQuery({ name: 'city', required: false })
+  @ApiOkResponse({ description: 'Categories, atmospheres, vibes, price ranges available' })
   async getFilterOptions(@Query('city') city?: string) {
     return this.venuesService.getFilterOptions(city);
   }
@@ -91,6 +102,7 @@ export class VenuesController {
   @CacheTTL(60)
   @ApiOperation({ summary: 'Top 5 trending venues by busyness' })
   @ApiQuery({ name: 'city', required: false })
+  @ApiOkResponse({ description: 'Top 5 venues ranked by live busyness' })
   async getTrending(@Query('city') city?: string) {
     return this.venuesService.getTrending(city);
   }
@@ -105,6 +117,7 @@ export class VenuesController {
   @ApiQuery({ name: 'swLng', required: false, type: Number, description: 'Southwest bound longitude' })
   @ApiQuery({ name: 'neLat', required: false, type: Number, description: 'Northeast bound latitude' })
   @ApiQuery({ name: 'neLng', required: false, type: Number, description: 'Northeast bound longitude' })
+  @ApiOkResponse({ description: 'Map markers with RAG color coding' })
   async getMapMarkers(
     @Query('city') city?: string,
     @Query('lat') lat?: string,
@@ -135,8 +148,11 @@ export class VenuesController {
   @Get(':id')
   @CacheTTL(300)
   @ApiOperation({ summary: 'Get venue detail by ID' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
   @ApiQuery({ name: 'lat', required: false, type: Number })
   @ApiQuery({ name: 'lng', required: false, type: Number })
+  @ApiOkResponse({ description: 'Full venue detail with live stats' })
+  @ApiNotFoundResponse({ description: 'Venue not found' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('lat') lat?: string,
@@ -159,6 +175,8 @@ export class VenuesController {
   @Post(':id/view')
   @NoCache()
   @ApiOperation({ summary: 'Track venue view' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'View tracked (increments totalViews)' })
   async trackView(@Param('id', ParseUUIDPipe) id: string) {
     await this.venuesService.trackView(id);
     return { success: true };
