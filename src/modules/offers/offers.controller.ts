@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards';
 import { NoGuestGuard } from '../../common/guards';
 import { CurrentUser } from '../auth/decorators';
 import { User } from '../users/entities/user.entity';
+import { RedeemOfferDto } from './dto/redeem-offer.dto';
 import { ErrorCode } from '../../common/enums';
 import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
 
@@ -110,7 +111,7 @@ export class OffersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Redeem a claimed offer' })
   @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
-  @ApiBody({ schema: { type: 'object', properties: { voucherCode: { type: 'string', example: 'REKI-ABC123' } }, required: ['voucherCode'] } })
+  @ApiBody({ type: RedeemOfferDto })
   @ApiOkResponse({ description: 'Offer redeemed — transactionId + savingValue returned' })
   @ApiBadRequestResponse({ description: 'Voucher does not belong to you, or already redeemed' })
   @ApiNotFoundResponse({ description: 'Offer or voucher not found' })
@@ -118,7 +119,7 @@ export class OffersController {
   @ApiForbiddenResponse({ description: 'Guest users cannot redeem offers' })
   async redeem(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { voucherCode: string },
+    @Body() body: RedeemOfferDto,
     @CurrentUser() user: User,
   ) {
     const offer = await this.offersService.findById(id);

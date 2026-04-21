@@ -11,7 +11,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { RegisterDto, RefreshTokenDto, GoogleAuthDto, AppleAuthDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
+import { RegisterDto, LoginDto, RefreshTokenDto, GoogleAuthDto, AppleAuthDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { LocalAuthGuard } from './guards';
 import { CurrentUser } from './decorators';
 import { User } from '../users/entities/user.entity';
@@ -37,11 +37,11 @@ export class AuthController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @UseGuards(LocalAuthGuard)
   @ApiOperation({ summary: 'Login with email/password' })
-  @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'Secret123' } }, required: ['email', 'password'] } })
+  @ApiBody({ type: LoginDto })
   @ApiOkResponse({ description: 'Login success — returns access + refresh tokens' })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded (5/min)' })
-  async login(@CurrentUser() user: User) {
+  async login(@Body() _dto: LoginDto, @CurrentUser() user: User) {
     return this.authService.login(user);
   }
 

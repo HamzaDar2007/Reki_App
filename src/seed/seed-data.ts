@@ -627,7 +627,7 @@ export const MOCK_BUSINESS_USERS = [
   {
     venueIndex: 0, // Albert's Schloss
     email: 'manager@alberts.com',
-    name: 'Ethan Rowley',
+    name: 'John Smith',
     password: 'business123',
     role: BusinessRole.OWNER,
     phone: '+447111222333',
@@ -635,7 +635,7 @@ export const MOCK_BUSINESS_USERS = [
   {
     venueIndex: 1, // Warehouse Project
     email: 'manager@warehouse.com',
-    name: 'Amira Khan',
+    name: 'Sarah Connor',
     password: 'business123',
     role: BusinessRole.OWNER,
     phone: '+447222333444',
@@ -643,7 +643,7 @@ export const MOCK_BUSINESS_USERS = [
   {
     venueIndex: 3, // The Alchemist
     email: 'manager@alchemist.com',
-    name: 'Oscar Finch',
+    name: 'Mike Taylor',
     password: 'business123',
     role: BusinessRole.MANAGER,
     phone: '+447333444555',

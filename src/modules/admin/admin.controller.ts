@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../auth/guards';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
 import { Role, NotificationType } from '../../common/enums';
+import { TestPushDto } from './dto/test-push.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -157,10 +158,10 @@ export class AdminController {
 
   @Post('test-push')
   @ApiOperation({ summary: 'Send a test push notification to a user (admin only)' })
-  @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, body: { type: 'string' } }, required: ['userId'] } })
+  @ApiBody({ type: TestPushDto })
   @ApiCreatedResponse({ description: 'Test push dispatched (or queued if Firebase not configured)' })
   async testPush(
-    @Body() body: { userId: string; title?: string; body?: string },
+    @Body() body: TestPushDto,
   ) {
     const result = await this.pushService.sendToUser(
       body.userId,
