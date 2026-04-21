@@ -136,9 +136,9 @@ Week 10 ░░░░░░░░░░░░░░░░░░░░   0%  ❌ O
 | 5 | trackView Fix (POST /venues/:id/view → actually increments VenueAnalytics.totalViews) | ✅ |
 | 6 | README.md (setup, env vars, demo accounts, API table, architecture) | ✅ |
 | 7 | Demo Guide (docs/demo-guide.md — step-by-step with curl commands) | ✅ |
-| 8 | Database Schema Doc (docs/database-schema.md — 12 tables, columns, indexes) | ✅ |
+| 8 | Database Schema Doc (docs/database-schema.md — 17 tables, columns, indexes) | ✅ |
 | 9 | Phase 2 Roadmap (docs/phase-2-roadmap.md — Weeks 7-10 + beyond) | ✅ |
-| 10 | Swagger API Docs (auto-generated at /api/docs — 60 endpoints) | ✅ |
+| 10 | Swagger API Docs (auto-generated at /api/docs — 83 endpoints) | ✅ |
 | 11 | 5 Demo Accounts (demo@reki.app, admin@reki.app, 3 business managers) | ✅ |
 
 ---

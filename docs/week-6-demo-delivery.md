@@ -234,8 +234,8 @@ TESTED:
 
 ### Backend Documentation Package:
 1. **README.md** ✅ — Project setup, env vars, demo accounts, full API table, project structure
-2. **API Documentation** ✅ — Swagger UI auto-generated at `/api/docs` (55 endpoints)
-3. **Database Schema** ✅ — `docs/database-schema.md` (12 tables, all columns, indexes, enums)
+2. **API Documentation** ✅ — Swagger UI auto-generated at `/api/docs` (83 endpoints)
+3. **Database Schema** ✅ — `docs/database-schema.md` (17 tables, all columns, indexes, enums)
 4. **Environment Setup** ✅ — `.env.example` with all 13 variables + README table
 5. **Seed Data** ✅ — Auto-load on first start (15 venues, 15 offers, 20 tags, 5 users)
 6. **Demo Guide** ✅ — `docs/demo-guide.md` (step-by-step walkthrough with curl commands)
@@ -256,12 +256,12 @@ Beyond: Android, multi-city, payments, live partnerships
 ---
 
 ## Week 6 Deliverables Summary
-1. ✅ Final MVP build (all APIs working, tested, stable) — **55 Swagger endpoints, webpack build passing**
+1. ✅ Final MVP build (all APIs working, tested, stable) — **83 Swagger endpoints, webpack build passing**
 2. ✅ Demo seed data finalized (15 venues × 3 images, 15 offers, 5 users) — **Updated in seed-data.ts**
 3. ✅ Demo reset + simulation endpoints — **TESTED**: reset clears all, 7 scenarios working
 4. ✅ Demo walkthrough script (5-minute investor demo) — **Backend supports all 3 acts**
-5. ✅ API documentation (Swagger) — **Auto-generated at `/api/docs`, 55 endpoints**
-6. ✅ Database schema documentation — **`docs/database-schema.md` (12 tables)**
+5. ✅ API documentation (Swagger) — **Auto-generated at `/api/docs`, 83 endpoints**
+6. ✅ Database schema documentation — **`docs/database-schema.md` (17 tables)**
 7. ✅ Environment configuration documented — **`.env.example` + README.md table**
 8. ✅ Handover documentation package — **README.md + demo-guide.md + database-schema.md**
 9. ✅ Phase 2 technical roadmap — **`docs/phase-2-roadmap.md` (Weeks 7-10 + beyond)**

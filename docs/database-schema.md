@@ -2,7 +2,7 @@
 
 > **Database:** PostgreSQL 18
 > **ORM:** TypeORM with `synchronize: true` (dev mode)
-> **Total Tables:** 12
+> **Total Tables:** 17
 
 ---
 
@@ -12,17 +12,23 @@
 User (1) ─────── (N) Notification
 User (1) ─────── (N) Redemption
 User (1) ─────── (N) RefreshToken
+User (1) ─────── (N) Device
+User (1) ─────── (1) NotificationPreference
+User (1) ─────── (N) GeofenceLog
+User (1) ─────── (N) SyncAction
 
 Venue (1) ─────── (1) Busyness
 Venue (1) ─────── (1) Vibe
 Venue (1) ─────── (N) Offer
 Venue (1) ─────── (N) VenueAnalytics
 Venue (1) ─────── (N) BusinessUser
+Venue (1) ─────── (N) Redemption
 
 Offer (1) ─────── (N) Redemption
 
 Tag (standalone)
 ActivityLog (standalone)
+AreaAnalytics (standalone, aggregated per area/hour)
 ```
 
 ---
@@ -42,6 +48,12 @@ ActivityLog (standalone)
 | isActive | BOOLEAN | default: true | Account active flag |
 | preferences | JSONB | nullable | `{ vibes: string[], music: string[] }` |
 | savedVenues | TEXT[] | default: [] | Array of venue UUIDs |
+| currentLat | DECIMAL(10,7) | nullable | Last known GPS latitude (Week 8) |
+| currentLng | DECIMAL(10,7) | nullable | Last known GPS longitude (Week 8) |
+| locationUpdatedAt | TIMESTAMP | nullable | When location was last reported |
+| locationEnabled | BOOLEAN | default: false | Foreground location consent |
+| backgroundLocationEnabled | BOOLEAN | default: false | Background location consent (geofencing) |
+| appState | JSONB | nullable | Cross-device state backup (Week 10) |
 | createdAt | TIMESTAMP | auto | |
 | updatedAt | TIMESTAMP | auto | |
 
@@ -245,6 +257,102 @@ ActivityLog (standalone)
 
 ---
 
+## Table: `devices` (Week 9 — Push Notifications)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| userId | UUID | FK → users, ON DELETE CASCADE | |
+| fcmToken | VARCHAR | UNIQUE, indexed | Firebase Cloud Messaging token |
+| platform | ENUM | default: ios | ios, android, web |
+| deviceId | VARCHAR | NOT NULL | Client-generated device identifier |
+| appVersion | VARCHAR | nullable | |
+| isActive | BOOLEAN | default: true | Set false when FCM reports invalid token |
+| lastActiveAt | TIMESTAMP | nullable | For stale device cleanup |
+| createdAt | TIMESTAMP | auto | |
+| updatedAt | TIMESTAMP | auto | |
+
+**Indexes:** `IDX_device_userId`, `IDX_device_fcmToken` (unique)
+
+---
+
+## Table: `notification_preferences` (Week 9)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| userId | UUID | UNIQUE, FK → users, ON DELETE CASCADE | 1:1 with user |
+| vibeAlerts | BOOLEAN | default: true | Venue busyness alerts |
+| livePerformance | BOOLEAN | default: true | Live music/DJ events |
+| socialCheckins | BOOLEAN | default: true | Friend check-in alerts |
+| offerAlerts | BOOLEAN | default: true | New offers from saved venues |
+| weeklyRecap | BOOLEAN | default: true | Weekly summary |
+| proximityAlerts | BOOLEAN | default: true | Geofence-triggered offers |
+| quietHoursStart | VARCHAR | nullable | e.g., "22:00" |
+| quietHoursEnd | VARCHAR | nullable | e.g., "08:00" |
+| createdAt | TIMESTAMP | auto | |
+| updatedAt | TIMESTAMP | auto | |
+
+---
+
+## Table: `geofence_logs` (Week 8 — Proximity Alerts)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| userId | UUID | NOT NULL | |
+| venueId | UUID | NOT NULL | |
+| distance | DECIMAL(10,2) | NOT NULL | Meters at time of notification |
+| offerId | UUID | nullable | If triggered by an offer |
+| notifiedAt | TIMESTAMP | NOT NULL | Used for dedupe (4-hour cooldown per venue) |
+| createdAt | TIMESTAMP | auto | |
+
+**Indexes:** `IDX_geofence_user_venue`, `IDX_geofence_user_notified`
+
+---
+
+## Table: `area_analytics` (Week 8 — Popular Neighborhoods)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| areaName | VARCHAR | NOT NULL | e.g., "Northern Quarter" |
+| city | VARCHAR | default: Manchester | |
+| activeVenues | INT | default: 0 | Venues live in this area |
+| totalUsers | INT | default: 0 | Users currently present |
+| avgBusyness | INT | default: 0 | 0-100 average across area venues |
+| date | VARCHAR | NOT NULL | YYYY-MM-DD bucket |
+| hour | INT | default: 0 | 0-23 hour bucket |
+| createdAt | TIMESTAMP | auto | |
+
+**Indexes:** `IDX_area_city_date`
+
+---
+
+## Table: `sync_actions` (Week 10 — Offline Queue)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| clientActionId | VARCHAR | NOT NULL | Idempotency key from client |
+| deviceId | VARCHAR | NOT NULL, indexed | |
+| userId | UUID | NOT NULL, indexed | |
+| type | ENUM | NOT NULL | BUSYNESS_UPDATE, VIBE_UPDATE, OFFER_TOGGLE, NOTIFICATION_READ, VENUE_SAVE, VENUE_VIEW |
+| status | ENUM | default: pending, indexed | pending, success, conflict, rejected |
+| data | JSONB | nullable | Raw offline payload |
+| venueId | UUID | nullable | Target venue |
+| notificationId | UUID | nullable | Target notification |
+| offerId | UUID | nullable | Target offer |
+| offlineTimestamp | TIMESTAMP | NOT NULL | When user performed action offline |
+| conflictMessage | VARCHAR | nullable | Human-readable conflict reason |
+| serverData | JSONB | nullable | Current server state (for conflict UI) |
+| conflictOptions | TEXT[] | nullable | e.g., ["keep_server", "override_with_mine"] |
+| syncedAt | TIMESTAMP | auto | When server received/processed |
+
+**Indexes:** `IDX_sync_deviceId`, `IDX_sync_userId`, `IDX_sync_status`
+
+---
+
 ## Enums
 
 | Enum | Values |
@@ -258,5 +366,8 @@ ActivityLog (standalone)
 | OfferType | 2-for-1, discount, freebie, guestlist, happy-hour |
 | OfferStatus | active, inactive, expired, upcoming |
 | RedemptionStatus | active, redeemed, expired |
-| NotificationType | vibe_alert, live_performance, social_checkin, offer_confirmation, welcome, weekly_recap, ticket_secured |
+| NotificationType | vibe_alert, live_performance, social_checkin, offer_confirmation, welcome, weekly_recap, ticket_secured, proximity_offer |
+| DevicePlatform | ios, android, web |
+| SyncActionType | BUSYNESS_UPDATE, VIBE_UPDATE, OFFER_TOGGLE, NOTIFICATION_READ, VENUE_SAVE, VENUE_VIEW |
+| SyncActionStatus | pending, success, conflict, rejected |
 | ErrorCode | 27 error codes (see `src/common/enums/error-codes.enum.ts`) |
