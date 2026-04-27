@@ -18,7 +18,8 @@
     "migration:run": "npm run typeorm -- migration:run -d src/config/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/config/data-source.ts",
     "migration:show": "npm run typeorm -- migration:show -d src/config/data-source.ts",
-    "db:drop": "node drop-all-tables.js"
+    "db:drop": "node drop-all-tables.js",
+    "db:fresh": "npm run db:drop && npm run migration:run"
   },
   "keywords": [],
   "author": "",
