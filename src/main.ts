@@ -107,9 +107,18 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  logger.log(`🚀 REKI Backend running on http://localhost:${port}`);
-  logger.log(`📄 Swagger Docs: http://localhost:${port}/api/docs`);
+  const port = parseInt(process.env.PORT || '3000', 10);
+
+  try {
+    await app.listen(port);
+    logger.log(`🚀 REKI Backend running on http://localhost:${port}`);
+    logger.log(`📄 Swagger Docs: http://localhost:${port}/api/docs`);
+  } catch (err: any) {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${port} is already in use. Set a different PORT in .env or stop the existing process.`);
+      process.exit(1);
+    }
+    throw err;
+  }
 }
 bootstrap();
