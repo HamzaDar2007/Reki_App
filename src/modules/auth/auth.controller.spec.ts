@@ -27,7 +27,7 @@ describe('AuthController', () => {
 
   it('login', async () => {
     const user = { id: '1', email: 'a@b.com' } as any;
-    const result = await controller.login(user);
+    const result = await controller.login({ email: 'a@b.com', password: '123' }, user);
     expect(authService.login).toHaveBeenCalledWith(user);
     expect(result).toHaveProperty('user');
   });

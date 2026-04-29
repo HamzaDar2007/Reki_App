@@ -18,7 +18,8 @@ describe('AdminController', () => {
       getActivityLogs: jest.fn().mockResolvedValue({ logs: [], total: 0 }),
       getNotifications: jest.fn().mockResolvedValue({ notifications: [], total: 0 }),
     };
-    controller = new AdminController(service as AdminService);
+    const pushService = { sendToUser: jest.fn(), sendToUsers: jest.fn() };
+    controller = new AdminController(service as AdminService, pushService as any);
   });
 
   it('getStats', async () => {

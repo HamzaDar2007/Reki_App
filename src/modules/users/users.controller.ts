@@ -102,4 +102,11 @@ export class UsersController {
       limit ? Number(limit) : 10,
     );
   }
+
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile with location' })
+  @ApiOkResponse({ description: 'User profile including location data, preferences, and saved venues count' })
+  async getProfile(@CurrentUser() user: User) {
+    return this.usersService.getProfile(user.id);
+  }
 }

@@ -91,4 +91,31 @@ export class UsersService {
     });
     return { redemptions, ...paginate(redemptions, total, page, limit).pagination };
   }
+
+  // === Profile ===
+
+  async getProfile(userId: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      authProvider: user.authProvider,
+      isVerified: user.isVerified,
+      preferences: user.preferences || { vibes: [], music: [] },
+      savedVenuesCount: (user.savedVenues || []).length,
+      location: {
+        currentLat: user.currentLat,
+        currentLng: user.currentLng,
+        locationUpdatedAt: user.locationUpdatedAt,
+        locationEnabled: user.locationEnabled,
+        backgroundLocationEnabled: user.backgroundLocationEnabled,
+      },
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
 }

@@ -4,6 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
+import jwksClient = require('jwks-rsa');
+import * as jwt from 'jsonwebtoken';
 import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/entities/notification.entity';
@@ -12,6 +15,10 @@ import { Role, AuthProvider, NotificationType } from '../../common/enums';
 
 @Injectable()
 export class AuthService {
+  private googleClient = new OAuth2Client();
+  private appleJwksClient = jwksClient({
+    jwksUri: 'https://appleid.apple.com/auth/keys',
+  });
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -21,7 +28,7 @@ export class AuthService {
     private notificationsRepository: Repository<Notification>,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersRepository.findOne({ where: { email } });
@@ -80,12 +87,19 @@ export class AuthService {
   }
 
   async googleAuth(idToken: string) {
-    // In production: verify idToken with Google's tokeninfo endpoint
-    // For now: decode the token payload to get user info
-    // Google verification would use: https://oauth2.googleapis.com/tokeninfo?id_token=...
-    const decoded = this.jwtService.decode(idToken) as any;
+    let decoded;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        // audience: this.configService.get<string>('app.google.clientId') // Add this in production
+      });
+      decoded = ticket.getPayload();
+    } catch (err) {
+      throw new BadRequestException('Failed to verify Google ID token');
+    }
+
     if (!decoded || !decoded.email) {
-      throw new BadRequestException('Invalid Google ID token');
+      throw new BadRequestException('Invalid Google ID token payload');
     }
 
     const email = decoded.email;
@@ -120,11 +134,25 @@ export class AuthService {
   }
 
   async appleAuth(identityToken: string, authorizationCode: string) {
-    // In production: verify identityToken with Apple's public keys
-    // Apple verification: https://appleid.apple.com/auth/keys
-    const decoded = this.jwtService.decode(identityToken) as any;
+    let decoded;
+    try {
+      const decodedToken = jwt.decode(identityToken, { complete: true });
+      if (!decodedToken || typeof decodedToken === 'string' || !decodedToken.header || !decodedToken.header.kid) {
+        throw new BadRequestException('Invalid Apple identity token format');
+      }
+
+      const key = await this.appleJwksClient.getSigningKey(decodedToken.header.kid);
+      const signingKey = key.getPublicKey();
+
+      decoded = jwt.verify(identityToken, signingKey, {
+        issuer: 'https://appleid.apple.com',
+      }) as any;
+    } catch (err) {
+      throw new BadRequestException('Failed to verify Apple identity token');
+    }
+
     if (!decoded || !decoded.sub) {
-      throw new BadRequestException('Invalid Apple identity token');
+      throw new BadRequestException('Invalid Apple identity token payload');
     }
 
     const email = decoded.email || `${decoded.sub}@privaterelay.appleid.com`;
@@ -174,11 +202,10 @@ export class AuthService {
     );
 
     // In production: send resetToken via email using a mail service
-    // For dev: return the token directly for testing
+    console.log(`[Email Service Mock] Password reset token for ${email}: ${resetToken}`);
+
     return {
       message: 'If the email exists, a reset link has been sent.',
-      // DEV ONLY — remove in production
-      resetToken,
     };
   }
 

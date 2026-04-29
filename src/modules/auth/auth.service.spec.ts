@@ -4,6 +4,33 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
+
+jest.mock('google-auth-library', () => {
+  return {
+    OAuth2Client: jest.fn().mockImplementation(() => {
+      return {
+        verifyIdToken: jest.fn()
+      };
+    })
+  };
+});
+
+jest.mock('jwks-rsa', () => {
+  return jest.fn().mockImplementation(() => ({
+    getSigningKey: jest.fn().mockResolvedValue({
+      getPublicKey: () => 'mock-public-key'
+    })
+  }));
+});
+
+jest.mock('jsonwebtoken', () => {
+  return {
+    decode: jest.fn(),
+    verify: jest.fn(),
+  };
+});
+
 import { AuthService } from './auth.service';
 import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
@@ -148,8 +175,17 @@ describe('AuthService', () => {
   });
 
   describe('googleAuth', () => {
+    let mockVerifyIdToken: jest.Mock;
+
+    beforeEach(() => {
+      // Get the mocked verifyIdToken instance
+      mockVerifyIdToken = (service as any).googleClient.verifyIdToken;
+    });
+
     it('should create new user for new Google login', async () => {
-      jwtService.decode.mockReturnValue({ email: 'google@test.com', name: 'Google User' });
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => ({ email: 'google@test.com', name: 'Google User' })
+      });
       usersRepo.findOne.mockResolvedValue(null);
       const newUser = { id: 'g-1', email: 'google@test.com', name: 'Google User', role: Role.USER };
       usersRepo.create.mockReturnValue(newUser);
@@ -165,7 +201,9 @@ describe('AuthService', () => {
     });
 
     it('should login existing Google user without creating welcome notif', async () => {
-      jwtService.decode.mockReturnValue({ email: 'existing@test.com', name: 'Existing' });
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => ({ email: 'existing@test.com', name: 'Existing' })
+      });
       const existing = { id: 'e-1', email: 'existing@test.com', name: 'Existing', role: Role.USER };
       usersRepo.findOne.mockResolvedValue(existing);
       refreshTokensRepo.create.mockReturnValue({});
@@ -177,14 +215,16 @@ describe('AuthService', () => {
     });
 
     it('should throw BadRequestException for invalid token', async () => {
-      jwtService.decode.mockReturnValue(null);
+      mockVerifyIdToken.mockRejectedValue(new Error('Invalid token'));
       await expect(service.googleAuth('bad-token')).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('appleAuth', () => {
     it('should create new user for Apple login', async () => {
-      jwtService.decode.mockReturnValue({ sub: 'apple-sub-123', email: 'apple@test.com', name: 'Apple User' });
+      (jwt.decode as jest.Mock).mockReturnValue({ header: { kid: 'mock-kid' } });
+      (jwt.verify as jest.Mock).mockReturnValue({ sub: 'apple-sub-123', email: 'apple@test.com', name: 'Apple User' });
+
       usersRepo.findOne.mockResolvedValue(null);
       const newUser = { id: 'a-1', email: 'apple@test.com', name: 'Apple User', role: Role.USER };
       usersRepo.create.mockReturnValue(newUser);
@@ -199,17 +239,16 @@ describe('AuthService', () => {
     });
 
     it('should throw BadRequestException for invalid Apple token', async () => {
-      jwtService.decode.mockReturnValue(null);
+      (jwt.decode as jest.Mock).mockReturnValue(null);
       await expect(service.appleAuth('bad', 'bad')).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('forgotPassword', () => {
-    it('should return reset token for existing user', async () => {
+    it('should return success message for existing user', async () => {
       usersRepo.findOne.mockResolvedValue(mockUser);
       const result = await service.forgotPassword('test@reki.app');
       expect(result.message).toContain('reset link');
-      expect(result.resetToken).toBe('mock-token');
     });
 
     it('should return same message for non-existing email (prevent enumeration)', async () => {
