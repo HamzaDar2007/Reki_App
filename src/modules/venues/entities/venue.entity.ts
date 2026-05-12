@@ -6,6 +6,8 @@ import {
   UpdateDateColumn,
   OneToMany,
   OneToOne,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
 import { VenueCategory } from '../../../common/enums';
@@ -13,6 +15,7 @@ import { Busyness } from '../../busyness/entities/busyness.entity';
 import { Vibe } from '../../vibes/entities/vibe.entity';
 import { Offer } from '../../offers/entities/offer.entity';
 import { VenueAnalytics } from '../../business/entities/venue-analytics.entity';
+import { BusinessUser } from '../../business/entities/business-user.entity';
 
 @Entity('venues')
 @Index('IDX_venue_city', ['city'])
@@ -65,6 +68,13 @@ export class Venue {
 
   @Column({ type: 'decimal', precision: 2, scale: 1, default: 4.0 })
   rating: number;
+
+  @Column({ nullable: true })
+  businessUserId: string;
+
+  @ManyToOne(() => BusinessUser, (businessUser) => businessUser.venues)
+  @JoinColumn({ name: 'businessUserId' })
+  businessUser: BusinessUser;
 
   @OneToOne(() => Busyness, (busyness) => busyness.venue)
   busyness: Busyness;

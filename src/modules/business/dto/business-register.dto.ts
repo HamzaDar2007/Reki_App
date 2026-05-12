@@ -16,21 +16,6 @@ export class BusinessRegisterDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'New Venue' })
-  @IsNotEmpty()
-  @IsString()
-  venueName: string;
-
-  @ApiProperty({ example: '123 Oxford Road, Manchester' })
-  @IsNotEmpty()
-  @IsString()
-  venueAddress: string;
-
-  @ApiProperty({ example: 'bar' })
-  @IsNotEmpty()
-  @IsString()
-  venueCategory: string;
-
   @ApiPropertyOptional({ example: '+4412345678' })
   @IsOptional()
   @IsString()

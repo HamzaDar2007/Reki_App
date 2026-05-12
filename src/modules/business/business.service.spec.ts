@@ -41,16 +41,16 @@ describe('BusinessService', () => {
     email: 'manager@alberts.com',
     name: 'John Smith',
     password: '$2b$10$hashed',
-    venueId: 'venue-1',
     isApproved: true,
     isActive: true,
-    venue: { id: 'venue-1', name: "Albert's Schloss", address: '27 Peter Street' },
+    venues: [{ id: 'venue-1', name: "Albert's Schloss", address: '27 Peter Street' }],
   };
 
   const mockVenue = {
     id: 'venue-1',
     name: "Albert's Schloss",
     address: '27 Peter Street',
+    businessUserId: 'biz-1',
     openingHours: '12:00',
     closingTime: '02:00',
     isVerified: true,
@@ -107,6 +107,7 @@ describe('BusinessService', () => {
     }).compile();
 
     service = module.get<BusinessService>(BusinessService);
+    venuesRepo.findOne.mockResolvedValue(mockVenue);
   });
 
   describe('login', () => {
@@ -119,7 +120,7 @@ describe('BusinessService', () => {
       const result = await service.login('manager@alberts.com', 'business123');
       expect(result.user.email).toBe('manager@alberts.com');
       expect(result.user.role).toBe('business');
-      expect(result.user.venue.name).toBe("Albert's Schloss");
+      expect(result.user.venues[0].name).toBe("Albert's Schloss");
       expect(result.tokens.accessToken).toBe('biz-token');
     });
 
@@ -146,28 +147,21 @@ describe('BusinessService', () => {
       bizUsersRepo.findOne.mockResolvedValue(null);
       bizUsersRepo.create.mockReturnValue({ id: 'new-biz' });
       bizUsersRepo.save.mockResolvedValue({ id: 'new-biz' });
-      venuesRepo.findOne.mockResolvedValue(null);
-      venuesRepo.create.mockReturnValue({ id: 'new-venue', name: 'New Bar' });
-      venuesRepo.save.mockResolvedValue({ id: 'new-venue', name: 'New Bar' });
-      activityLogsRepo.create.mockReturnValue({});
-      activityLogsRepo.save.mockResolvedValue({});
 
       const result = await service.register({
         email: 'new@bar.com',
         password: 'Pass1234',
         name: 'New Owner',
-        venueName: 'New Bar',
-        venueAddress: '123 Test St',
-        venueCategory: 'bar',
       });
       expect(result.success).toBe(true);
-      expect(['pending', 'approved']).toContain(result.status);
+      expect(result.status).toBe('approved');
+      expect(result.message).toContain('create venues');
     });
 
     it('should throw ConflictException for duplicate email', async () => {
       bizUsersRepo.findOne.mockResolvedValue(mockBizUser);
       await expect(
-        service.register({ email: 'manager@alberts.com', password: 'Pass1234', name: 'X', venueName: 'Y', venueAddress: 'Z', venueCategory: 'bar' }),
+        service.register({ email: 'manager@alberts.com', password: 'Pass1234', name: 'X' }),
       ).rejects.toThrow(ConflictException);
     });
   });

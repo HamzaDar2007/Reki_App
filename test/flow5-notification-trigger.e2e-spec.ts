@@ -28,7 +28,27 @@ describe('Flow 5: Busyness → Notification Trigger (e2e)', () => {
       .post('/auth/business/login')
       .send({ email: 'manager@alberts.com', password: 'business123' });
     businessToken = bizRes.body.tokens.accessToken;
-    venueId = bizRes.body.user.venue.id;
+    const venues = bizRes.body.user.venues ?? [];
+    if (venues.length > 0) {
+      venueId = venues[0].id;
+    } else {
+      const createRes = await request(app.getHttpServer())
+        .post('/business/venues')
+        .set('Authorization', `Bearer ${businessToken}`)
+        .send({
+          name: 'E2E Test Venue',
+          address: '123 Test Street',
+          city: 'Manchester',
+          area: 'City Centre',
+          category: 'bar',
+          lat: 53.4808,
+          lng: -2.2426,
+          openingHours: '10:00',
+          closingTime: '02:00',
+        })
+        .expect(201);
+      venueId = createRes.body.venue.id;
+    }
 
     // Login as demo user  
     const userRes = await request(app.getHttpServer())

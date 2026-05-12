@@ -34,9 +34,31 @@ describe('Flow 3: Business Dashboard & Status Update (e2e)', () => {
       .expect(200);
 
     expect(res.body).toHaveProperty('tokens');
-    expect(res.body.user).toHaveProperty('venue');
+    expect(res.body.user).toHaveProperty('venues');
     businessToken = res.body.tokens.accessToken;
-    venueId = res.body.user.venue.id;
+    const venues = res.body.user.venues ?? [];
+    if (venues.length > 0) {
+      venueId = venues[0].id;
+      return;
+    }
+
+    const createRes = await request(app.getHttpServer())
+      .post('/business/venues')
+      .set('Authorization', `Bearer ${businessToken}`)
+      .send({
+        name: 'E2E Test Venue',
+        address: '123 Test Street',
+        city: 'Manchester',
+        area: 'City Centre',
+        category: 'bar',
+        lat: 53.4808,
+        lng: -2.2426,
+        openingHours: '10:00',
+        closingTime: '02:00',
+      })
+      .expect(201);
+
+    venueId = createRes.body.venue.id;
   });
 
   it('GET /business/dashboard/:venueId — should return dashboard', async () => {

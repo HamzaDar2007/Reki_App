@@ -4,8 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { BusinessRole } from '../../../common/enums';
 import { Venue } from '../../venues/entities/venue.entity';
@@ -24,12 +23,8 @@ export class BusinessUser {
   @Column()
   password: string;
 
-  @Column()
-  venueId: string;
-
-  @ManyToOne(() => Venue)
-  @JoinColumn({ name: 'venueId' })
-  venue: Venue;
+  @OneToMany(() => Venue, (venue) => venue.businessUser)
+  venues: Venue[];
 
   @Column({ type: 'enum', enum: BusinessRole, default: BusinessRole.OWNER })
   role: BusinessRole;

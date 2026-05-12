@@ -23,6 +23,7 @@ import {
   CreateOfferDto,
   UpdateOfferDto,
   ToggleOfferDto,
+  CreateVenueDto,
 } from './dto';
 import { ForgotPasswordDto, ResetPasswordDto } from '../auth/dto';
 
@@ -44,9 +45,9 @@ export class BusinessController {
   }
 
   @Post('auth/business/register')
-  @ApiOperation({ summary: 'Business registration (apply to join REKI)' })
+  @ApiOperation({ summary: 'Business registration (create account only)' })
   @ApiBody({ type: BusinessRegisterDto })
-  @ApiCreatedResponse({ description: 'Business application submitted — pending admin approval' })
+  @ApiCreatedResponse({ description: 'Business account created — can now login and create venues' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   async register(@Body() dto: BusinessRegisterDto) {
     return this.businessService.register(dto);
@@ -69,6 +70,59 @@ export class BusinessController {
   @ApiBadRequestResponse({ description: 'Token invalid or expired' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.businessService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  // ─── VENUE MANAGEMENT ──────────────────────────────────
+
+  @Post('business/venues')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new venue' })
+  @ApiBody({ type: CreateVenueDto })
+  @ApiCreatedResponse({ description: 'Venue created successfully' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  async createVenue(
+    @CurrentUser() user: any,
+    @Body() dto: CreateVenueDto,
+  ) {
+    return this.businessService.createVenue(user.id, dto);
+  }
+
+  @Get('business/venues')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all my venues' })
+  @ApiOkResponse({ description: 'List of venues owned by business user' })
+  async getMyVenues(@CurrentUser() user: any) {
+    return this.businessService.getMyVenues(user.id);
+  }
+
+  @Put('business/venues/:id')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update venue details' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Venue updated successfully' })
+  @ApiForbiddenResponse({ description: 'Not authorized for this venue' })
+  async updateVenue(
+    @Param('id') venueId: string,
+    @CurrentUser() user: any,
+    @Body() dto: any,
+  ) {
+    return this.businessService.updateVenue(venueId, user.id, dto);
+  }
+
+  @Delete('business/venues/:id')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove venue from account' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Venue removed from account' })
+  async deleteVenue(
+    @Param('id') venueId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.businessService.deleteVenue(venueId, user.id);
   }
 
   // ─── DASHBOARD ─────────────────────────────────────────

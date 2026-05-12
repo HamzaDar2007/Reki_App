@@ -259,7 +259,6 @@ export class SeedService implements OnModuleInit {
           email: bu.email,
           name: bu.name,
           password: hashedPassword,
-          venueId: venues[bu.venueIndex].id,
           role: bu.role,
           phone: bu.phone,
           isApproved: true,
@@ -267,7 +266,22 @@ export class SeedService implements OnModuleInit {
         }),
       );
     }
-    await this.businessUsersRepository.save(records);
-    this.logger.log(`Seeded ${records.length} business users`);
+    const savedUsers = await this.businessUsersRepository.save(records);
+    const savedByEmail = new Map(savedUsers.map((user) => [user.email, user]));
+    const venueUpdates = [];
+
+    for (const bu of MOCK_BUSINESS_USERS) {
+      const user = savedByEmail.get(bu.email);
+      if (!user) {
+        throw new Error(`Business user not saved: ${bu.email}`);
+      }
+      venueUpdates.push({
+        id: venues[bu.venueIndex].id,
+        businessUserId: user.id,
+      });
+    }
+
+    await this.venuesRepository.save(venueUpdates);
+    this.logger.log(`Seeded ${savedUsers.length} business users`);
   }
 }

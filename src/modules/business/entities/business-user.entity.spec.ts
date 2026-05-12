@@ -21,9 +21,9 @@ describe('BusinessUser Entity', () => {
     });
   });
 
-  it('should store venue ownership', () => {
-    user.venueId = 'venue-uuid-123';
-    expect(user.venueId).toBe('venue-uuid-123');
+  it('should store venues list', () => {
+    user.venues = [{ id: 'venue-uuid-123' } as any];
+    expect(user.venues[0].id).toBe('venue-uuid-123');
   });
 
   it('should have approval status', () => {

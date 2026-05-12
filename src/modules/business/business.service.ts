@@ -63,7 +63,7 @@ export class BusinessService {
   async login(email: string, password: string) {
     const businessUser = await this.businessUsersRepository.findOne({
       where: { email },
-      relations: ['venue'],
+      relations: ['venues'],
     });
 
     if (!businessUser || !(await bcrypt.compare(password, businessUser.password))) {
@@ -89,13 +89,11 @@ export class BusinessService {
         email: businessUser.email,
         name: businessUser.name,
         role: 'business',
-        venue: businessUser.venue
-          ? {
-              id: businessUser.venue.id,
-              name: businessUser.venue.name,
-              address: businessUser.venue.address,
-            }
-          : null,
+        venues: businessUser.venues?.map(v => ({
+          id: v.id,
+          name: v.name,
+          address: v.address,
+        })) || [],
       },
       tokens,
     };
@@ -107,46 +105,12 @@ export class BusinessService {
       throw new ConflictException('Email already registered');
     }
 
-    // Create the venue first
-    const venue = this.venuesRepository.create({
-      name: dto.venueName,
-      address: dto.venueAddress,
-      city: 'Manchester',
-      area: dto.venueAddress.split(',').pop()?.trim() || 'Manchester',
-      category: (dto.venueCategory as VenueCategory) || VenueCategory.BAR,
-      lat: 53.4808,
-      lng: -2.2426,
-      priceLevel: 2,
-      openingHours: '18:00',
-      closingTime: '02:00',
-      isLive: false,
-      tags: [],
-      rating: 0,
-    });
-    const savedVenue = await this.venuesRepository.save(venue);
-
-    // Create busyness + vibe records for the new venue
-    const busyness = this.busynessRepository.create({
-      venueId: savedVenue.id,
-      level: BusynessLevel.QUIET,
-      percentage: 25,
-    });
-    await this.busynessRepository.save(busyness);
-
-    const vibe = this.vibesRepository.create({
-      venueId: savedVenue.id,
-      tags: [],
-      musicGenre: [],
-    });
-    await this.vibesRepository.save(vibe);
-
-    // Create business user
+    // Create business user only (no venue)
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const businessUser = this.businessUsersRepository.create({
       email: dto.email,
       name: dto.name,
       password: hashedPassword,
-      venueId: savedVenue.id,
       phone: dto.phone,
       isApproved: true, // MVP: auto-approve
     });
@@ -154,7 +118,7 @@ export class BusinessService {
 
     return {
       success: true,
-      message: 'Business registered and approved. You can now log in.',
+      message: 'Business account created successfully. You can now log in and create venues.',
       status: 'approved',
     };
   }
@@ -209,6 +173,126 @@ export class BusinessService {
     await this.businessUsersRepository.save(businessUser);
 
     return { message: 'Password reset successful' };
+  }
+
+  // ─── VENUE MANAGEMENT ──────────────────────────────────
+
+  async createVenue(businessUserId: string, dto: any) {
+    // Create the venue
+    const venue = this.venuesRepository.create({
+      name: dto.name,
+      address: dto.address,
+      city: dto.city,
+      area: dto.area,
+      category: this.normalizeVenueCategory(dto.category),
+      lat: dto.lat,
+      lng: dto.lng,
+      priceLevel: dto.priceLevel || 2,
+      openingHours: dto.openingHours,
+      closingTime: dto.closingTime,
+      isLive: false,
+      tags: dto.tags || [],
+      images: dto.images || [],
+      rating: 0,
+      businessUserId,
+    });
+    const savedVenue = await this.venuesRepository.save(venue);
+
+    // Create busyness + vibe records for the new venue
+    const busyness = this.busynessRepository.create({
+      venueId: savedVenue.id,
+      level: BusynessLevel.QUIET,
+      percentage: 25,
+    });
+    await this.busynessRepository.save(busyness);
+
+    const vibe = this.vibesRepository.create({
+      venueId: savedVenue.id,
+      tags: [],
+      musicGenre: [],
+    });
+    await this.vibesRepository.save(vibe);
+
+    // Log activity
+    await this.logActivity(businessUserId, 'business', 'VENUE_CREATED', 'venue', savedVenue.id, {
+      name: savedVenue.name,
+    });
+
+    return {
+      success: true,
+      message: 'Venue created successfully',
+      venue: {
+        id: savedVenue.id,
+        name: savedVenue.name,
+        address: savedVenue.address,
+        city: savedVenue.city,
+        category: savedVenue.category,
+      },
+    };
+  }
+
+  async getMyVenues(businessUserId: string) {
+    const venues = await this.venuesRepository.find({
+      where: { businessUserId },
+      relations: ['busyness', 'vibe'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      venues: venues.map(v => ({
+        id: v.id,
+        name: v.name,
+        address: v.address,
+        city: v.city,
+        area: v.area,
+        category: v.category,
+        isLive: this.isVenueLive(v),
+        busyness: {
+          level: v.busyness?.level || 'quiet',
+          percentage: v.busyness?.percentage || 0,
+        },
+        vibe: {
+          tags: v.vibe?.tags || [],
+        },
+        createdAt: v.createdAt,
+      })),
+      total: venues.length,
+    };
+  }
+
+  async updateVenue(venueId: string, businessUserId: string, data: any) {
+    await this.verifyOwnership(venueId, businessUserId);
+
+    const venue = await this.venuesRepository.findOne({ where: { id: venueId } });
+    if (!venue) throw new NotFoundException('Venue not found');
+
+    if (data?.category) {
+      data.category = this.normalizeVenueCategory(data.category);
+    }
+    Object.assign(venue, data);
+    const saved = await this.venuesRepository.save(venue);
+
+    return {
+      success: true,
+      message: 'Venue updated successfully',
+      venue: saved,
+    };
+  }
+
+  async deleteVenue(venueId: string, businessUserId: string) {
+    await this.verifyOwnership(venueId, businessUserId);
+
+    // Soft delete - just mark as inactive or remove businessUserId
+    const venue = await this.venuesRepository.findOne({ where: { id: venueId } });
+    if (!venue) throw new NotFoundException('Venue not found');
+
+    venue.businessUserId = null;
+    await this.venuesRepository.save(venue);
+
+    return {
+      success: true,
+      message: 'Venue removed from your account',
+    };
   }
 
   // ─── DASHBOARD ─────────────────────────────────────────
@@ -512,7 +596,7 @@ export class BusinessService {
   // ─── HELPERS ───────────────────────────────────────────
 
   private async generateTokens(businessUser: BusinessUser) {
-    const payload = { sub: businessUser.id, email: businessUser.email, role: 'business', venueId: businessUser.venueId };
+    const payload = { sub: businessUser.id, email: businessUser.email, role: 'business' };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('app.jwt.secret'),
@@ -528,11 +612,11 @@ export class BusinessService {
   }
 
   private async verifyOwnership(venueId: string, businessUserId: string) {
-    const businessUser = await this.businessUsersRepository.findOne({
-      where: { id: businessUserId },
+    const venue = await this.venuesRepository.findOne({
+      where: { id: venueId },
     });
 
-    if (!businessUser || businessUser.venueId !== venueId) {
+    if (!venue || venue.businessUserId !== businessUserId) {
       throw new ForbiddenException({
         code: ErrorCode.VENUE_NOT_OWNED,
         message: "You don't have permission to manage this venue",
@@ -587,6 +671,20 @@ export class BusinessService {
     if (!offer.validDays || offer.validDays.length === 0) return 'Anytime';
     if (offer.validDays.length === 7) return `Daily, ${offer.validTimeStart}-${offer.validTimeEnd}`;
     return `${offer.validDays.join(', ')}, ${offer.validTimeStart}-${offer.validTimeEnd}`;
+  }
+
+  private normalizeVenueCategory(category: string): VenueCategory {
+    if (typeof category !== 'string') {
+      throw new BadRequestException('Invalid venue category');
+    }
+
+    const normalized = category.trim().toLowerCase();
+    const values = Object.values(VenueCategory);
+    if (!normalized || !values.includes(normalized as VenueCategory)) {
+      throw new BadRequestException(`Invalid venue category: ${category}`);
+    }
+
+    return normalized as VenueCategory;
   }
 
   private async triggerVibeAlert(venueId: string) {
@@ -701,14 +799,14 @@ export class BusinessService {
   async findBusinessUserById(id: string): Promise<BusinessUser | null> {
     return this.businessUsersRepository.findOne({
       where: { id },
-      relations: ['venue'],
+      relations: ['venues'],
     });
   }
 
   async findBusinessUserByEmail(email: string): Promise<BusinessUser | null> {
     return this.businessUsersRepository.findOne({
       where: { email },
-      relations: ['venue'],
+      relations: ['venues'],
     });
   }
 }
