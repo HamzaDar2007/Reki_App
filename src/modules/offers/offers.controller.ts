@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ParseUUIDPipe, Res, StreamableFile, Header } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -24,7 +25,7 @@ import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.inter
 @ApiTags('Offers')
 @Controller('offers')
 export class OffersController {
-  constructor(private readonly offersService: OffersService) {}
+  constructor(private readonly offersService: OffersService) { }
 
   @Get(':id')
   @CacheTTL(120)
@@ -168,9 +169,8 @@ export class OffersController {
   @ApiNotFoundResponse({ description: 'Offer not found' })
   @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
   @ApiForbiddenResponse({ description: 'Guest users cannot generate wallet passes' })
-  async walletPass(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
-    // Apple Wallet .pkpass generation requires Apple Developer certs
-    // Returning pass data structure that can be used when certs are configured
+  @Header('Content-Type', 'application/vnd.apple.pkpass')
+  async walletPass(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
     const offer = await this.offersService.findById(id);
     if (!offer) {
       throw new NotFoundException({ code: ErrorCode.OFFER_NOT_FOUND, message: 'Offer not found' });
@@ -181,21 +181,18 @@ export class OffersController {
       throw new BadRequestException('You must claim this offer first');
     }
 
-    return {
-      passType: 'coupon',
-      headerField: offer.venue?.name || 'REKI Venue',
-      primaryField: offer.title,
-      secondaryField: `Valid: ${offer.validTimeStart} - ${offer.validTimeEnd}`,
-      auxiliaryField: claim.voucherCode,
-      barcode: {
-        format: 'PKBarcodeFormatQR',
-        message: `reki://offer/${id}/${claim.voucherCode}`,
-      },
-      expiresAt: offer.expiresAt,
-      location: offer.venue
-        ? { lat: offer.venue.lat, lng: offer.venue.lng }
-        : null,
-      message: 'Apple Wallet .pkpass generation requires Apple Developer certificates. Pass data returned for integration.',
-    };
+    const passBuffer = await this.offersService.generateAppleWalletPass(offer, claim.voucherCode);
+
+    try {
+      // JSON.parse throws if buffer is a real pkpass (zip file), meaning it's real
+      // If it's a mock error JSON, it will succeed
+      const mockData = JSON.parse(passBuffer.toString());
+      res.set('Content-Type', 'application/json');
+      return mockData;
+    } catch {
+      // It's a real buffer so return it as PKPass file
+      res.set('Content-Disposition', `attachment; filename="offer-${claim.voucherCode}.pkpass"`);
+      return new StreamableFile(passBuffer);
+    }
   }
 }

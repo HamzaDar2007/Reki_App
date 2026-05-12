@@ -24,7 +24,7 @@ import {
   UpdateOfferDto,
   ToggleOfferDto,
 } from './dto';
-import { ForgotPasswordDto } from '../auth/dto';
+import { ForgotPasswordDto, ResetPasswordDto } from '../auth/dto';
 
 @ApiTags('Business')
 @Controller()
@@ -59,6 +59,16 @@ export class BusinessController {
   @ApiOkResponse({ description: 'Password reset email dispatched' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.businessService.forgotPassword(dto.email);
+  }
+
+  @Post('auth/business/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Business reset password' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiOkResponse({ description: 'Password updated' })
+  @ApiBadRequestResponse({ description: 'Token invalid or expired' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.businessService.resetPassword(dto.token, dto.newPassword);
   }
 
   // ─── DASHBOARD ─────────────────────────────────────────

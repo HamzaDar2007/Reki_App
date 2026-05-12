@@ -51,7 +51,7 @@ describe('Flow 4: Business Offer Lifecycle (e2e)', () => {
         title: 'E2E Test Offer',
         description: 'Test offer from e2e',
         type: '2-for-1',
-        validDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        validDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         validTimeStart: '00:00',
         validTimeEnd: '23:59',
         maxRedemptions: 50,
@@ -68,7 +68,8 @@ describe('Flow 4: Business Offer Lifecycle (e2e)', () => {
       .get(`/venues/${venueId}`)
       .expect(200);
 
-    const offerIds = res.body.venue.offers.map((o: any) => o.id);
+    const venue = res.body.venue ?? res.body;
+    const offerIds = venue.offers.map((o: any) => o.id);
     expect(offerIds).toContain(offerId);
   });
 

@@ -15,6 +15,7 @@ describe('AuthController', () => {
       forgotPassword: jest.fn().mockResolvedValue({ message: 'ok' }),
       resetPassword: jest.fn().mockResolvedValue({ message: 'ok' }),
       refreshToken: jest.fn().mockResolvedValue({ accessToken: 'new' }),
+      verifyEmail: jest.fn().mockResolvedValue({ message: 'ok' }),
     };
     controller = new AuthController(authService as AuthService);
   });
@@ -60,5 +61,10 @@ describe('AuthController', () => {
   it('refreshToken', async () => {
     const result = await controller.refreshToken({ refreshToken: 'rt' });
     expect(authService.refreshToken).toHaveBeenCalledWith('rt');
+  });
+
+  it('verifyEmail', async () => {
+    const result = await controller.verifyEmail('tok');
+    expect(authService.verifyEmail).toHaveBeenCalledWith('tok');
   });
 });

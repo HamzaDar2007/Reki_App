@@ -6,6 +6,7 @@ export default registerAs('app', () => ({
   defaultCity: process.env.DEFAULT_CITY || 'Manchester',
   defaultLat: parseFloat(process.env.DEFAULT_LAT) || 53.4808,
   defaultLng: parseFloat(process.env.DEFAULT_LNG) || -2.2426,
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3001',
   jwt: {
     secret: process.env.JWT_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
@@ -13,4 +14,30 @@ export default registerAs('app', () => ({
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
   weatherApiKey: process.env.WEATHER_API_KEY,
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+  },
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID,
+    teamId: process.env.APPLE_TEAM_ID,
+    keyId: process.env.APPLE_KEY_ID,
+    privateKey: process.env.APPLE_PRIVATE_KEY,
+    passTypeId: process.env.APPLE_PASS_TYPE_ID || 'pass.com.reki.offers',
+    passCertPath: process.env.APPLE_PASS_CERT_PATH,
+    passKeyPath: process.env.APPLE_PASS_KEY_PATH,
+    passWwdrPath: process.env.APPLE_PASS_WWDR_PATH,
+    passKeyPassword: process.env.APPLE_PASS_KEY_PASSWORD,
+  },
+  email: {
+    provider: process.env.EMAIL_PROVIDER || 'console',
+    from: process.env.EMAIL_FROM || 'noreply@reki.app',
+    sendgridApiKey: process.env.SENDGRID_API_KEY,
+    sesRegion: process.env.AWS_SES_REGION,
+    sesAccessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
+    sesSecretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: parseInt(process.env.SMTP_PORT, 10) || 587,
+    smtpUser: process.env.SMTP_USER,
+    smtpPass: process.env.SMTP_PASS,
+  },
 }));

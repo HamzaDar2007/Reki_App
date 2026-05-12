@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { appConfig, databaseConfig } from './config';
 import { AppController } from './app.controller';
@@ -25,6 +26,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { PushModule } from './modules/push/push.module';
 import { LiveModule } from './modules/live/live.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { CronModule } from './modules/cron/cron.module';
 import { SeedModule } from './seed/seed.module';
 
 @Module({
@@ -59,6 +61,9 @@ import { SeedModule } from './seed/seed.module';
       inject: [ConfigService],
     }),
 
+    // Cron Job Scheduling
+    ScheduleModule.forRoot(),
+
     // Feature modules
     SyncModule,
     AuthModule,
@@ -77,6 +82,7 @@ import { SeedModule } from './seed/seed.module';
     DevicesModule,
     PushModule,
     LiveModule,
+    CronModule,
     SeedModule,
   ],
   controllers: [AppController],
@@ -88,4 +94,4 @@ import { SeedModule } from './seed/seed.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

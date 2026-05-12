@@ -36,6 +36,7 @@ import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { Role, AuthProvider } from '../../common/enums';
+import { EmailService } from '../email/email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -44,6 +45,7 @@ describe('AuthService', () => {
   let notificationsRepo: Record<string, jest.Mock>;
   let jwtService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let emailService: Record<string, jest.Mock>;
 
   const mockUser: Partial<User> = {
     id: 'user-1',
@@ -77,6 +79,10 @@ describe('AuthService', () => {
     configService = {
       get: jest.fn().mockReturnValue('test-secret'),
     };
+    emailService = {
+      sendPasswordResetEmail: jest.fn(),
+      sendVerificationEmail: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -86,6 +92,7 @@ describe('AuthService', () => {
         { provide: getRepositoryToken(Notification), useValue: notificationsRepo },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
+        { provide: EmailService, useValue: emailService },
       ],
     }).compile();
 
@@ -286,6 +293,31 @@ describe('AuthService', () => {
       jwtService.verify.mockReturnValue({ sub: 'gone', type: 'password-reset' });
       usersRepo.findOne.mockResolvedValue(null);
       await expect(service.resetPassword('token', 'pass')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('should verify email and set isVerified to true', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'user-1', type: 'email-verification' });
+      usersRepo.findOne.mockResolvedValue({ id: 'user-1', isVerified: false });
+
+      const result = await service.verifyEmail('valid-token');
+      expect(result.message).toBe('Email verified successfully');
+      expect(usersRepo.save).toHaveBeenCalled();
+    });
+
+    it('should return already verified if isVerified is true', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'user-1', type: 'email-verification' });
+      usersRepo.findOne.mockResolvedValue({ id: 'user-1', isVerified: true });
+
+      const result = await service.verifyEmail('valid-token');
+      expect(result.message).toBe('Email already verified');
+      expect(usersRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if token type is invalid', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'user-1', type: 'password-reset' });
+      await expect(service.verifyEmail('invalid-token')).rejects.toThrow(BadRequestException);
     });
   });
 

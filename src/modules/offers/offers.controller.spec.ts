@@ -47,6 +47,9 @@ describe('OffersController', () => {
         savingValue: 5,
         currency: 'GBP',
       }),
+      generateAppleWalletPass: jest.fn().mockResolvedValue(
+        Buffer.from(JSON.stringify({ passType: 'coupon', barcode: { format: 'PKBarcodeFormatQR' } }))
+      ),
     };
     controller = new OffersController(service as OffersService);
   });
@@ -130,21 +133,27 @@ describe('OffersController', () => {
   });
 
   describe('walletPass', () => {
+    let res: any;
+
+    beforeEach(() => {
+      res = { set: jest.fn() };
+    });
+
     it('returns wallet pass data', async () => {
       (service.findActiveClaimByUser as jest.Mock).mockResolvedValue({ voucherCode: 'RK-123' });
-      const result = await controller.walletPass('o-1', user);
+      const result = await controller.walletPass('o-1', user, res);
       expect(result.passType).toBe('coupon');
       expect(result.barcode).toBeDefined();
     });
 
     it('throws NotFoundException when offer not found', async () => {
       (service.findById as jest.Mock).mockResolvedValue(null);
-      await expect(controller.walletPass('bad', user)).rejects.toThrow(NotFoundException);
+      await expect(controller.walletPass('bad', user, res)).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when not claimed', async () => {
       (service.findActiveClaimByUser as jest.Mock).mockResolvedValue(null);
-      await expect(controller.walletPass('o-1', user)).rejects.toThrow(BadRequestException);
+      await expect(controller.walletPass('o-1', user, res)).rejects.toThrow(BadRequestException);
     });
   });
 });

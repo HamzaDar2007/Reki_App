@@ -18,6 +18,7 @@ import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusynessLevel } from '../../common/enums';
 import { PushService } from '../push/push.service';
 import { LiveGateway } from '../live/live.gateway';
+import { EmailService } from '../email/email.service';
 
 describe('BusinessService', () => {
   let service: BusinessService;
@@ -33,6 +34,7 @@ describe('BusinessService', () => {
   let activityLogsRepo: Record<string, jest.Mock>;
   let jwtService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let emailService: Record<string, jest.Mock>;
 
   const mockBizUser = {
     id: 'biz-1',
@@ -72,8 +74,16 @@ describe('BusinessService', () => {
     notificationsRepo = { create: jest.fn(), save: jest.fn(), find: jest.fn() };
     usersRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn().mockReturnValue(mockUsersQB) };
     activityLogsRepo = { create: jest.fn(), save: jest.fn() };
-    jwtService = { sign: jest.fn().mockReturnValue('biz-token') };
-    configService = { get: jest.fn().mockReturnValue('test-secret') };
+    jwtService = { sign: jest.fn().mockReturnValue('biz-token'), verify: jest.fn() };
+    configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'app.nodeEnv') return 'development';
+        return 'test-secret';
+      }),
+    };
+    emailService = {
+      sendPasswordResetEmail: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -90,6 +100,7 @@ describe('BusinessService', () => {
         { provide: getRepositoryToken(ActivityLog), useValue: activityLogsRepo },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
+        { provide: EmailService, useValue: emailService },
         { provide: PushService, useValue: { sendToUser: jest.fn().mockResolvedValue({ sent: true }), sendToUsers: jest.fn().mockResolvedValue({ totalUsers: 0, sent: 0, skipped: 0 }) } },
         { provide: LiveGateway, useValue: { broadcastBusynessUpdate: jest.fn(), broadcastVibeUpdate: jest.fn(), broadcastNewOffer: jest.fn(), broadcastNewRedemption: jest.fn(), broadcastNewSave: jest.fn() } },
       ],
@@ -166,13 +177,47 @@ describe('BusinessService', () => {
       bizUsersRepo.findOne.mockResolvedValue(mockBizUser);
       const result = await service.forgotPassword('manager@alberts.com');
       expect(result.message).toContain('reset link');
-      expect(result.resetToken).toBe('biz-token');
+      expect('resetToken' in result).toBe(true);
+      if ('resetToken' in result) {
+        expect(result.resetToken).toBe('biz-token');
+      }
     });
 
     it('should return generic message for non-existing email', async () => {
       bizUsersRepo.findOne.mockResolvedValue(null);
       const result = await service.forgotPassword('nope@test.com');
       expect(result.message).toContain('reset link');
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should reset password with valid token', async () => {
+      jwtService.verify.mockReturnValue({ sub: mockBizUser.id, type: 'business-password-reset' });
+      bizUsersRepo.findOne.mockResolvedValue({ ...mockBizUser });
+      bizUsersRepo.save.mockImplementation((user) => Promise.resolve(user));
+
+      const result = await service.resetPassword('valid-token', 'NewPass123');
+
+      expect(result.message).toBe('Password reset successful');
+      expect(bizUsersRepo.save).toHaveBeenCalled();
+    });
+
+    it('should throw for invalid token', async () => {
+      jwtService.verify.mockImplementation(() => {
+        throw new Error('bad-token');
+      });
+
+      await expect(service.resetPassword('bad-token', 'NewPass123')).rejects.toThrow(
+        'Invalid or expired reset token',
+      );
+    });
+
+    it('should throw for wrong token type', async () => {
+      jwtService.verify.mockReturnValue({ sub: mockBizUser.id, type: 'password-reset' });
+
+      await expect(service.resetPassword('wrong-type', 'NewPass123')).rejects.toThrow(
+        'Invalid token type',
+      );
     });
   });
 

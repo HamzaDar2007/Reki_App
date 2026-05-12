@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Query, Body, UseGuards, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -19,7 +19,7 @@ import { User } from '../users/entities/user.entity';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('register')
   @Throttle({ default: { ttl: 60000, limit: 3 } })
@@ -70,6 +70,17 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'Guest token issued (role=guest, limited scope)' })
   async guestLogin() {
     return this.authService.guestLogin();
+  }
+
+  @Get('verify-email')
+  @ApiOperation({ summary: 'Verify email with token' })
+  @ApiOkResponse({ description: 'Email verified' })
+  @ApiBadRequestResponse({ description: 'Invalid or expired token' })
+  async verifyEmail(@Query('token') token: string) {
+    if (!token) {
+      throw new BadRequestException('Verification token is required');
+    }
+    return this.authService.verifyEmail(token);
   }
 
   @Post('forgot-password')

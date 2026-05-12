@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Offer } from './entities/offer.entity';
 import { Redemption } from './entities/redemption.entity';
 import { OfferStatus, RedemptionStatus } from '../../common/enums';
 import { generateVoucherCode, generateTransactionId } from '../../common/utils/generators.util';
+import { PKPass } from 'passkit-generator';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class OffersService {
@@ -13,7 +17,8 @@ export class OffersService {
     private offersRepository: Repository<Offer>,
     @InjectRepository(Redemption)
     private redemptionsRepository: Repository<Redemption>,
-  ) {}
+    private configService: ConfigService,
+  ) { }
 
   async findById(id: string): Promise<Offer | null> {
     return this.offersRepository.findOne({ where: { id }, relations: ['venue'] });
@@ -174,5 +179,106 @@ export class OffersService {
     await this.offersRepository.increment({ id: redemption.offerId }, 'redemptionCount', 1);
 
     return this.redemptionsRepository.save(redemption);
+  }
+
+  /**
+   * Generate Apple Wallet Pass
+   * Requires proper Apple Developer certificates to be configured.
+   * Loads certificates from configured paths and generates a real .pkpass file.
+   */
+  async generateAppleWalletPass(offer: Offer, voucherCode: string): Promise<Buffer> {
+    const teamId = this.configService.get<string>('app.apple.teamId');
+    const passTypeId = this.configService.get<string>('app.apple.passTypeId');
+    const certPath = this.configService.get<string>('app.apple.passCertPath');
+    const keyPath = this.configService.get<string>('app.apple.passKeyPath');
+    const wwdrPath = this.configService.get<string>('app.apple.passWwdrPath');
+    const keyPassword = this.configService.get<string>('app.apple.passKeyPassword');
+
+    // Validate configuration
+    if (!teamId || !passTypeId) {
+      throw new Error(
+        'Apple Wallet configuration incomplete. Please set APPLE_TEAM_ID and APPLE_PASS_TYPE_ID in environment variables.'
+      );
+    }
+
+    if (!certPath || !keyPath || !wwdrPath) {
+      throw new Error(
+        'Apple Wallet certificate paths not configured. Please set APPLE_PASS_CERT_PATH, APPLE_PASS_KEY_PATH, and APPLE_PASS_WWDR_PATH in environment variables.'
+      );
+    }
+
+    // Check if certificate files exist
+    const certFullPath = path.resolve(certPath);
+    const keyFullPath = path.resolve(keyPath);
+    const wwdrFullPath = path.resolve(wwdrPath);
+
+    if (!fs.existsSync(certFullPath)) {
+      throw new Error(
+        `Apple Wallet certificate not found at: ${certFullPath}. ` +
+        'Please obtain a Pass Type ID certificate from Apple Developer Portal and place it at the configured path.'
+      );
+    }
+
+    if (!fs.existsSync(keyFullPath)) {
+      throw new Error(
+        `Apple Wallet private key not found at: ${keyFullPath}. ` +
+        'Please place your private key at the configured path.'
+      );
+    }
+
+    if (!fs.existsSync(wwdrFullPath)) {
+      throw new Error(
+        `Apple WWDR certificate not found at: ${wwdrFullPath}. ` +
+        'Please download the WWDR certificate from https://www.apple.com/certificateauthority/ and place it at the configured path.'
+      );
+    }
+
+    const passJsonString = JSON.stringify({
+      passTypeIdentifier: passTypeId,
+      teamIdentifier: teamId,
+      organizationName: 'REKI',
+      description: offer.title,
+      barcode: {
+        format: 'PKBarcodeFormatQR',
+        message: `reki://offer/${offer.id}/${voucherCode}`,
+        messageEncoding: 'iso-8859-1',
+      },
+      coupon: {
+        primaryFields: [{ key: 'offer', label: 'OFFER', value: offer.title }],
+        secondaryFields: [{ key: 'venue', label: 'VENUE', value: offer.venue?.name || 'REKI Venue' }],
+        auxiliaryFields: [{ key: 'code', label: 'CODE', value: voucherCode }],
+      },
+      foregroundColor: 'rgb(255, 255, 255)',
+      backgroundColor: 'rgb(102, 126, 234)',
+      labelColor: 'rgb(255, 255, 255)',
+    });
+
+    try {
+      const pass = new PKPass({
+        'pass.json': Buffer.from(passJsonString),
+      });
+
+      // Load certificates from configured paths
+      const certBuffer = fs.readFileSync(certFullPath);
+      const keyBuffer = fs.readFileSync(keyFullPath);
+      const wwdrBuffer = fs.readFileSync(wwdrFullPath);
+
+      // Set certificates using the correct API
+      pass.certificates = {
+        signerCert: certBuffer,
+        signerKey: keyBuffer,
+        wwdr: wwdrBuffer,
+        ...(keyPassword && { signerKeyPassphrase: keyPassword }),
+      };
+
+      const buffer = await pass.getAsBuffer();
+      return buffer;
+    } catch (error: any) {
+      throw new Error(
+        `Apple Wallet pass generation failed: ${error.message}. ` +
+        'Please verify your certificates are valid and properly configured. ' +
+        'See: https://developer.apple.com/documentation/walletpasses'
+      );
+    }
   }
 }

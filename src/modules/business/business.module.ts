@@ -16,6 +16,7 @@ import { User } from '../users/entities/user.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { PushModule } from '../push/push.module';
 import { LiveModule } from '../live/live.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { LiveModule } from '../live/live.module';
       }),
       inject: [ConfigService],
     }),
+    EmailModule,
     PushModule,
     LiveModule,
   ],

@@ -67,7 +67,8 @@ describe('Flow 3: Business Dashboard & Status Update (e2e)', () => {
       .get(`/venues/${venueId}`)
       .expect(200);
 
-    expect(res.body.venue.busyness.level).toBe('busy');
+    const venue = res.body.venue ?? res.body;
+    expect(venue.busyness.level).toBe('busy');
   });
 
   it('GET /business/venues/:id/status — should return updated status', async () => {

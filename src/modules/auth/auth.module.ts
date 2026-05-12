@@ -9,6 +9,7 @@ import { JwtStrategy, LocalStrategy } from './strategies';
 import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/entities/notification.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { Notification } from '../notifications/entities/notification.entity';
       }),
       inject: [ConfigService],
     }),
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, LocalStrategy],

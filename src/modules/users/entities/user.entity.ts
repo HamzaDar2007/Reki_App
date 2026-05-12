@@ -43,6 +43,11 @@ export class User {
   preferences: {
     vibes: string[];
     music: string[];
+    notifications?: {
+      weeklyRecap?: boolean;
+      offerAlerts?: boolean;
+      geofenceAlerts?: boolean;
+    };
   };
 
   @Column('text', { array: true, default: '{}' })

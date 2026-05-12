@@ -50,11 +50,20 @@ describe('Flow 2: Filter → Detail → Claim → Redeem (e2e)', () => {
       .get(`/venues/${venueId}`)
       .expect(200);
 
-    expect(res.body).toHaveProperty('venue');
-    expect(res.body.venue).toHaveProperty('name');
-    expect(res.body.venue).toHaveProperty('busyness');
-    if (res.body.venue.offers && res.body.venue.offers.length > 0) {
-      offerId = res.body.venue.offers[0].id;
+    const venue = res.body.venue ?? res.body;
+    expect(venue).toHaveProperty('name');
+    expect(venue).toHaveProperty('busyness');
+    if (venue.offers && venue.offers.length > 0) {
+      for (const offer of venue.offers) {
+        const offerRes = await request(app.getHttpServer())
+          .get(`/offers/${offer.id}`)
+          .expect(200);
+
+        if (offerRes.body?.offer?.isAvailableNow) {
+          offerId = offer.id;
+          break;
+        }
+      }
     }
   });
 

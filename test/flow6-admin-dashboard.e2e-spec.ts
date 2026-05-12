@@ -49,9 +49,10 @@ describe('Flow 6: Admin Dashboard & Logs (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(res.body).toHaveProperty('data');
-    expect(res.body).toHaveProperty('pagination');
-    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body).toHaveProperty('users');
+    expect(res.body).toHaveProperty('page');
+    expect(res.body).toHaveProperty('limit');
+    expect(res.body.users.length).toBeGreaterThan(0);
   });
 
   it('GET /admin/venues — should return venue list', async () => {
@@ -60,8 +61,10 @@ describe('Flow 6: Admin Dashboard & Logs (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(res.body).toHaveProperty('data');
-    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body).toHaveProperty('venues');
+    expect(res.body).toHaveProperty('page');
+    expect(res.body).toHaveProperty('limit');
+    expect(res.body.venues.length).toBeGreaterThan(0);
   });
 
   it('GET /admin/offers — should return offers list', async () => {
@@ -70,7 +73,9 @@ describe('Flow 6: Admin Dashboard & Logs (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(res.body).toHaveProperty('data');
+    expect(res.body).toHaveProperty('offers');
+    expect(res.body).toHaveProperty('page');
+    expect(res.body).toHaveProperty('limit');
   });
 
   it('GET /admin/activity-logs — should return activity logs', async () => {
@@ -79,7 +84,9 @@ describe('Flow 6: Admin Dashboard & Logs (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(res.body).toHaveProperty('data');
+    expect(res.body).toHaveProperty('logs');
+    expect(res.body).toHaveProperty('page');
+    expect(res.body).toHaveProperty('limit');
   });
 
   it('GET /admin/notifications — should return notification logs', async () => {

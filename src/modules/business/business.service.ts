@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -22,6 +23,7 @@ import { User } from '../users/entities/user.entity';
 import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { BusynessLevel, BusynessPercentageMap, VenueCategory, NotificationType, ErrorCode } from '../../common/enums';
 import { BusinessRegisterDto } from './dto';
+import { EmailService } from '../email/email.service';
 import { PushService } from '../push/push.service';
 import { LiveGateway } from '../live/live.gateway';
 import { getBusynessColor } from '../../common/utils/distance.util';
@@ -51,6 +53,7 @@ export class BusinessService {
     private activityLogsRepository: Repository<ActivityLog>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
     private pushService: PushService,
     private liveGateway: LiveGateway,
   ) {}
@@ -170,10 +173,42 @@ export class BusinessService {
       },
     );
 
-    return {
-      message: 'If the email exists, a reset link has been sent.',
-      resetToken, // DEV ONLY
-    };
+    await this.emailService.sendPasswordResetEmail(email, resetToken, businessUser.name);
+
+    const response = { message: 'If the email exists, a reset link has been sent.' };
+    if (this.configService.get<string>('app.nodeEnv') !== 'production') {
+      return {
+        ...response,
+        resetToken,
+      };
+    }
+
+    return response;
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('app.jwt.secret'),
+      });
+    } catch {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    if (payload.type !== 'business-password-reset') {
+      throw new BadRequestException('Invalid token type');
+    }
+
+    const businessUser = await this.businessUsersRepository.findOne({ where: { id: payload.sub } });
+    if (!businessUser) {
+      throw new BadRequestException('User not found');
+    }
+
+    businessUser.password = await bcrypt.hash(newPassword, 10);
+    await this.businessUsersRepository.save(businessUser);
+
+    return { message: 'Password reset successful' };
   }
 
   // ─── DASHBOARD ─────────────────────────────────────────

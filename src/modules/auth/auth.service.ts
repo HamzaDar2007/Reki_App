@@ -12,6 +12,7 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { RegisterDto } from './dto';
 import { Role, AuthProvider, NotificationType } from '../../common/enums';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,7 @@ export class AuthService {
     private notificationsRepository: Repository<Notification>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) { }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -56,6 +58,7 @@ export class AuthService {
 
     // Send welcome notification
     await this.createWelcomeNotification(saved.id);
+    await this.sendVerificationEmail(saved);
 
     return {
       user: { id: saved.id, email: saved.email, name: saved.name, role: saved.role },
@@ -87,11 +90,16 @@ export class AuthService {
   }
 
   async googleAuth(idToken: string) {
+    const clientId = this.configService.get<string>('app.google.clientId');
+    if (!clientId) {
+      throw new BadRequestException('Google OAuth is not configured. Please set GOOGLE_CLIENT_ID in environment variables.');
+    }
+
     let decoded;
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        // audience: this.configService.get<string>('app.google.clientId') // Add this in production
+        audience: clientId,
       });
       decoded = ticket.getPayload();
     } catch (err) {
@@ -134,6 +142,11 @@ export class AuthService {
   }
 
   async appleAuth(identityToken: string, authorizationCode: string) {
+    const clientId = this.configService.get<string>('app.apple.clientId');
+    if (!clientId) {
+      throw new BadRequestException('Apple OAuth is not configured. Please set APPLE_CLIENT_ID in environment variables.');
+    }
+
     let decoded;
     try {
       const decodedToken = jwt.decode(identityToken, { complete: true });
@@ -146,7 +159,15 @@ export class AuthService {
 
       decoded = jwt.verify(identityToken, signingKey, {
         issuer: 'https://appleid.apple.com',
+        audience: clientId,
       }) as any;
+
+      // Verify authorization code in production
+      // For production: Exchange authorizationCode with Apple's token endpoint
+      // to get refresh_token and validate the user session
+      if (authorizationCode) {
+        await this.verifyAppleAuthorizationCode(authorizationCode, decoded.sub);
+      }
     } catch (err) {
       throw new BadRequestException('Failed to verify Apple identity token');
     }
@@ -201,8 +222,8 @@ export class AuthService {
       },
     );
 
-    // In production: send resetToken via email using a mail service
-    console.log(`[Email Service Mock] Password reset token for ${email}: ${resetToken}`);
+    // Send password reset email via configured email provider
+    await this.emailService.sendPasswordResetEmail(email, resetToken, user.name);
 
     return {
       message: 'If the email exists, a reset link has been sent.',
@@ -232,6 +253,48 @@ export class AuthService {
     await this.usersRepository.save(user);
 
     return { message: 'Password reset successful' };
+  }
+
+  async sendVerificationEmail(user: User) {
+    const verificationToken = this.jwtService.sign(
+      { sub: user.id, type: 'email-verification' },
+      {
+        secret: this.configService.get<string>('app.jwt.secret'),
+        expiresIn: '24h',
+      },
+    );
+
+    // Send verification email via configured email provider
+    await this.emailService.sendVerificationEmail(user.email, verificationToken, user.name);
+  }
+
+  async verifyEmail(token: string) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('app.jwt.secret'),
+      });
+    } catch {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    if (payload.type !== 'email-verification') {
+      throw new BadRequestException('Invalid token type');
+    }
+
+    const user = await this.usersRepository.findOne({ where: { id: payload.sub } });
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (user.isVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    user.isVerified = true;
+    await this.usersRepository.save(user);
+
+    return { message: 'Email verified successfully' };
   }
 
   async refreshToken(refreshTokenStr: string) {
@@ -288,5 +351,31 @@ export class AuthService {
       icon: '🎉',
     });
     await this.notificationsRepository.save(notification);
+  }
+
+  /**
+   * Verify Apple authorization code by exchanging it with Apple's token endpoint.
+   * This provides additional security validation for production environments.
+   */
+  private async verifyAppleAuthorizationCode(authorizationCode: string, expectedSub: string): Promise<void> {
+    const clientId = this.configService.get<string>('app.apple.clientId');
+    const teamId = this.configService.get<string>('app.apple.teamId');
+    const keyId = this.configService.get<string>('app.apple.keyId');
+    const privateKey = this.configService.get<string>('app.apple.privateKey');
+
+    // In production, you would:
+    // 1. Create a client secret JWT signed with your Apple private key
+    // 2. Exchange the authorization code with Apple's token endpoint
+    // 3. Verify the returned user ID matches the identity token
+    
+    // For now, log a warning if credentials are missing
+    if (!teamId || !keyId || !privateKey) {
+      console.warn('[Apple Auth] Authorization code verification skipped: Apple credentials not fully configured');
+      return;
+    }
+
+    // TODO: Implement full authorization code exchange in production
+    // Reference: https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens
+    console.log(`[Apple Auth] Authorization code received for user ${expectedSub}. Full verification pending production setup.`);
   }
 }

@@ -4,11 +4,13 @@ import { OffersService } from './offers.service';
 import { Offer } from './entities/offer.entity';
 import { Redemption } from './entities/redemption.entity';
 import { OfferStatus, RedemptionStatus } from '../../common/enums';
+import { ConfigService } from '@nestjs/config';
 
 describe('OffersService', () => {
   let service: OffersService;
   let offersRepo: Record<string, jest.Mock>;
   let redemptionsRepo: Record<string, jest.Mock>;
+  let configService: Record<string, jest.Mock>;
 
   const mockOffer: Partial<Offer> = {
     id: 'offer-1',
@@ -35,12 +37,16 @@ describe('OffersService', () => {
       create: jest.fn(),
       save: jest.fn(),
     };
+    configService = {
+      get: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OffersService,
         { provide: getRepositoryToken(Offer), useValue: offersRepo },
         { provide: getRepositoryToken(Redemption), useValue: redemptionsRepo },
+        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 
