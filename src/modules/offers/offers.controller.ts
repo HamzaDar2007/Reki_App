@@ -27,6 +27,43 @@ import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.inter
 export class OffersController {
   constructor(private readonly offersService: OffersService) { }
 
+  @Get()
+  @CacheTTL(120)
+  @ApiOperation({ summary: 'Get all active offers' })
+  @ApiOkResponse({ description: 'List of all active offers with venue details' })
+  async findAll() {
+    const allOffers = await this.offersService.findAll();
+    
+    const enrichedOffers = allOffers.map(offer => ({
+      id: offer.id,
+      title: offer.title,
+      description: offer.description,
+      type: offer.type,
+      venue: offer.venue
+        ? { 
+            id: offer.venue.id,
+            name: offer.venue.name, 
+            address: `${offer.venue.area}, ${offer.venue.city}`,
+            category: offer.venue.category,
+          }
+        : null,
+      validDays: offer.validDays,
+      validTimeStart: offer.validTimeStart,
+      validTimeEnd: offer.validTimeEnd,
+      savingValue: Number(offer.savingValue) || 0,
+      currency: 'GBP',
+      status: this.offersService.getOfferStatus(offer),
+      isActive: offer.isActive,
+      isAvailableNow: this.offersService.isOfferAvailableNow(offer),
+      expiresAt: offer.expiresAt,
+    }));
+
+    return {
+      offers: enrichedOffers,
+      count: enrichedOffers.length,
+    };
+  }
+
   @Get(':id')
   @CacheTTL(120)
   @ApiOperation({ summary: 'Get offer detail by ID' })

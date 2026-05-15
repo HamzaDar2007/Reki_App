@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Post, NotFoundException, Req, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Param, Query, Post, NotFoundException, Req, ParseUUIDPipe, Inject, forwardRef } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -9,13 +9,18 @@ import {
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
+import { OffersService } from '../offers/offers.service';
 import { ErrorCode } from '../../common/enums';
 import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
 
 @ApiTags('Venues')
 @Controller('venues')
 export class VenuesController {
-  constructor(private readonly venuesService: VenuesService) {}
+  constructor(
+    private readonly venuesService: VenuesService,
+    @Inject(forwardRef(() => OffersService))
+    private readonly offersService: OffersService,
+  ) {}
 
   @Get()
   @CacheTTL(120)
@@ -180,5 +185,50 @@ export class VenuesController {
   async trackView(@Param('id', ParseUUIDPipe) id: string) {
     await this.venuesService.trackView(id);
     return { success: true };
+  }
+
+  @Get(':id/offers')
+  @CacheTTL(120)
+  @ApiOperation({ summary: 'Get all offers for a specific venue' })
+  @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'List of offers for the venue' })
+  @ApiNotFoundResponse({ description: 'Venue not found' })
+  async getVenueOffers(@Param('id', ParseUUIDPipe) id: string) {
+    const venue = await this.venuesService.findById(id);
+    if (!venue) {
+      throw new NotFoundException({
+        code: ErrorCode.VENUE_NOT_FOUND,
+        message: 'Venue not found',
+      });
+    }
+
+    const offers = await this.offersService.findByVenueId(id);
+    
+    const enrichedOffers = offers.map(offer => ({
+      id: offer.id,
+      title: offer.title,
+      description: offer.description,
+      type: offer.type,
+      validDays: offer.validDays,
+      validTimeStart: offer.validTimeStart,
+      validTimeEnd: offer.validTimeEnd,
+      savingValue: Number(offer.savingValue) || 0,
+      currency: 'GBP',
+      status: this.offersService.getOfferStatus(offer),
+      isActive: offer.isActive,
+      isAvailableNow: this.offersService.isOfferAvailableNow(offer),
+      expiresAt: offer.expiresAt,
+    }));
+
+    return {
+      venue: {
+        id: venue.id,
+        name: venue.name,
+        address: venue.address,
+        city: venue.city,
+      },
+      offers: enrichedOffers,
+      count: enrichedOffers.length,
+    };
   }
 }

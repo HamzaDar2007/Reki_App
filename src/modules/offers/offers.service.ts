@@ -24,6 +24,14 @@ export class OffersService {
     return this.offersRepository.findOne({ where: { id }, relations: ['venue'] });
   }
 
+  async findAll(): Promise<Offer[]> {
+    return this.offersRepository.find({ 
+      where: { isActive: true },
+      relations: ['venue'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async findByVenueId(venueId: string): Promise<Offer[]> {
     return this.offersRepository.find({ where: { venueId } });
   }
