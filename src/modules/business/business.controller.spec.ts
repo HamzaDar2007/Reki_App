@@ -1,9 +1,11 @@
 import { BusinessController } from './business.controller';
 import { BusinessService } from './business.service';
+import { UploadService } from '../upload/upload.service';
 
 describe('BusinessController', () => {
   let controller: BusinessController;
   let service: Partial<BusinessService>;
+  let uploadService: Partial<UploadService>;
   const user = { id: 'u-1' } as any;
 
   beforeEach(() => {
@@ -40,7 +42,10 @@ describe('BusinessController', () => {
         total: 1,
       }),
     };
-    controller = new BusinessController(service as BusinessService);
+    uploadService = {
+      uploadImage: jest.fn().mockResolvedValue({ url: 'https://reki-bucket.s3.eu-west-2.amazonaws.com/venues/test.jpg', key: 'venues/test.jpg' }),
+    };
+    controller = new BusinessController(service as BusinessService, uploadService as UploadService);
   });
 
   it('login', async () => {
@@ -109,7 +114,7 @@ describe('BusinessController', () => {
     expect(service.deleteOffer).toHaveBeenCalledWith('o-1', 'u-1');
   });
 
-  it('createVenue — passes dto and user id to service', async () => {
+  it('createVenue — no files: passes dto with empty images to service', async () => {
     const dto = {
       name: 'The Blue Moon Bar',
       address: '123 Oxford Road, Manchester',
@@ -122,12 +127,34 @@ describe('BusinessController', () => {
       openingHours: '18:00',
       closingTime: '02:00',
       tags: ['Chill', 'Party'],
-      images: ['https://example.com/image1.jpg'],
     } as any;
 
-    const result = await controller.createVenue(user, dto);
-    expect(service.createVenue).toHaveBeenCalledWith('u-1', dto);
+    const result = await controller.createVenue(user, dto, []);
+    expect(service.createVenue).toHaveBeenCalledWith('u-1', { ...dto, images: [] });
     expect(result.success).toBe(true);
+    expect(result.venue.id).toBe('v-new');
+  });
+
+  it('createVenue — with files: uploads to S3 and passes URLs to service', async () => {
+    const dto = {
+      name: 'The Blue Moon Bar',
+      address: '123 Oxford Road, Manchester',
+      city: 'Manchester',
+      area: 'City Centre',
+      category: 'bar',
+      lat: 53.4808,
+      lng: -2.2426,
+      openingHours: '18:00',
+      closingTime: '02:00',
+    } as any;
+    const mockFile = { originalname: 'img.jpg', mimetype: 'image/jpeg', size: 100, buffer: Buffer.from('') } as any;
+
+    const result = await controller.createVenue(user, dto, [mockFile]);
+    expect(uploadService.uploadImage).toHaveBeenCalledWith(mockFile, 'venues');
+    expect(service.createVenue).toHaveBeenCalledWith('u-1', {
+      ...dto,
+      images: ['https://reki-bucket.s3.eu-west-2.amazonaws.com/venues/test.jpg'],
+    });
     expect(result.venue.id).toBe('v-new');
   });
 

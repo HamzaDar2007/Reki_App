@@ -8,11 +8,16 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiBody, ApiOkResponse, ApiCreatedResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiForbiddenResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiBody, ApiOkResponse, ApiCreatedResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiConsumes } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
+import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards';
 import { BusinessGuard } from '../../common/guards';
 import { CurrentUser } from '../auth/decorators';
@@ -26,11 +31,15 @@ import {
   CreateVenueDto,
 } from './dto';
 import { ForgotPasswordDto, ResetPasswordDto } from '../auth/dto';
+import { VenueCategory } from '../../common/enums';
 
 @ApiTags('Business')
 @Controller()
 export class BusinessController {
-  constructor(private readonly businessService: BusinessService) {}
+  constructor(
+    private readonly businessService: BusinessService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   // ─── AUTH (under /auth/business) ───────────────────────
 
@@ -77,15 +86,48 @@ export class BusinessController {
   @Post('business/venues')
   @UseGuards(JwtAuthGuard, BusinessGuard)
   @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a new venue' })
-  @ApiBody({ type: CreateVenueDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name', 'address', 'city', 'area', 'category', 'lat', 'lng', 'openingHours', 'closingTime'],
+      properties: {
+        name: { type: 'string', example: 'The Blue Moon Bar' },
+        address: { type: 'string', example: '123 Oxford Road, Manchester' },
+        city: { type: 'string', example: 'Manchester' },
+        area: { type: 'string', example: 'City Centre' },
+        category: { type: 'string', enum: Object.values(VenueCategory), example: 'bar' },
+        lat: { type: 'number', example: 53.4808 },
+        lng: { type: 'number', example: -2.2426 },
+        priceLevel: { type: 'number', example: 2, minimum: 1, maximum: 4 },
+        openingHours: { type: 'string', example: '18:00' },
+        closingTime: { type: 'string', example: '02:00' },
+        tags: { type: 'string', example: '["Chill","Party"]', description: 'JSON array of tags' },
+        images: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'Image files (max 10, 5MB each, jpg/png/webp)',
+        },
+      },
+    },
+  })
   @ApiCreatedResponse({ description: 'Venue created successfully' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @UseInterceptors(FilesInterceptor('images', 10, { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
   async createVenue(
     @CurrentUser() user: any,
     @Body() dto: CreateVenueDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.businessService.createVenue(user.id, dto);
+    const imageUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const { url } = await this.uploadService.uploadImage(file, 'venues');
+        imageUrls.push(url);
+      }
+    }
+    return this.businessService.createVenue(user.id, { ...dto, images: imageUrls });
   }
 
   @Get('business/venues')

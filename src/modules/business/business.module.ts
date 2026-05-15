@@ -17,6 +17,7 @@ import { ActivityLog } from '../audit/entities/activity-log.entity';
 import { PushModule } from '../push/push.module';
 import { LiveModule } from '../live/live.module';
 import { EmailModule } from '../email/email.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
     PushModule,
     LiveModule,
+    UploadModule,
   ],
   controllers: [BusinessController],
   providers: [BusinessService],
