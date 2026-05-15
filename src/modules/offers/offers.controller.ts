@@ -15,11 +15,12 @@ import {
 } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { JwtAuthGuard } from '../auth/guards';
-import { NoGuestGuard } from '../../common/guards';
+import { NoGuestGuard, RolesGuard } from '../../common/guards';
+import { Roles } from '../../common/decorators';
 import { CurrentUser } from '../auth/decorators';
 import { User } from '../users/entities/user.entity';
 import { RedeemOfferDto } from './dto/redeem-offer.dto';
-import { ErrorCode } from '../../common/enums';
+import { ErrorCode, Role } from '../../common/enums';
 import { CacheTTL, NoCache } from '../../common/interceptors/cache-headers.interceptor';
 
 @ApiTags('Offers')
@@ -102,7 +103,8 @@ export class OffersController {
 
   @Post(':id/claim')
   @NoCache()
-  @UseGuards(JwtAuthGuard, NoGuestGuard)
+  @Roles(Role.USER)
+  @UseGuards(JwtAuthGuard, RolesGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Claim offer — generates voucher code + QR' })
   @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
