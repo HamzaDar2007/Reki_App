@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, HttpCode, HttpStatus } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
@@ -145,5 +145,15 @@ export class UsersController {
       avatarUrl = url;
     }
     return this.usersService.updateProfile(user.id, dto.name, dto.phone, avatarUrl);
+  }
+
+  @Delete('account')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(NoGuestGuard)
+  @ApiOperation({ summary: 'Delete user account (GDPR — permanent)' })
+  @ApiOkResponse({ description: 'Account deleted successfully' })
+  @ApiForbiddenResponse({ description: 'Guest users cannot delete accounts' })
+  async deleteAccount(@CurrentUser() user: User) {
+    return this.usersService.deleteAccount(user.id);
   }
 }

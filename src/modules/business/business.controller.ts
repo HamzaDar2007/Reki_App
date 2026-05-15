@@ -31,7 +31,7 @@ import {
   ToggleOfferDto,
   CreateVenueDto,
 } from './dto';
-import { ForgotPasswordDto, ResetPasswordDto } from '../auth/dto';
+import { ForgotPasswordDto, ResetPasswordDto, LogoutDto } from '../auth/dto';
 import { VenueCategory } from '../../common/enums';
 
 @ApiTags('Business')
@@ -80,6 +80,18 @@ export class BusinessController {
   @ApiBadRequestResponse({ description: 'Token invalid or expired' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.businessService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('auth/business/logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Business logout' })
+  @ApiBody({ type: LogoutDto })
+  @ApiOkResponse({ description: 'Logged out successfully' })
+  async businessLogout() {
+    // Business refresh tokens are not persisted — logout is client-side
+    return { success: true, message: 'Logged out successfully' };
   }
 
   // ─── VENUE MANAGEMENT ──────────────────────────────────
@@ -182,16 +194,49 @@ export class BusinessController {
   @Put('business/venues/:id')
   @UseGuards(JwtAuthGuard, BusinessGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update venue details' })
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Update venue details (with optional new images)' })
   @ApiParam({ name: 'id', description: 'Venue UUID', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        address: { type: 'string' },
+        city: { type: 'string' },
+        area: { type: 'string' },
+        category: { type: 'string', enum: Object.values(VenueCategory) },
+        lat: { type: 'number' },
+        lng: { type: 'number' },
+        priceLevel: { type: 'number', minimum: 1, maximum: 4 },
+        openingHours: { type: 'string' },
+        closingTime: { type: 'string' },
+        tags: { type: 'string', description: 'JSON array of tags e.g. ["Chill","Party"]' },
+        images: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'New images to append (max 10, 5MB each)',
+        },
+      },
+    },
+  })
   @ApiOkResponse({ description: 'Venue updated successfully' })
   @ApiForbiddenResponse({ description: 'Not authorized for this venue' })
+  @UseInterceptors(FilesInterceptor('images', 10, { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
   async updateVenue(
     @Param('id') venueId: string,
     @CurrentUser() user: any,
     @Body() dto: any,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.businessService.updateVenue(venueId, user.id, dto);
+    const newImageUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const { url } = await this.uploadService.uploadImage(file, 'venues');
+        newImageUrls.push(url);
+      }
+    }
+    return this.businessService.updateVenue(venueId, user.id, dto, newImageUrls);
   }
 
   @Delete('business/venues/:id')

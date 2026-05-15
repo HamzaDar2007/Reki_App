@@ -8,13 +8,15 @@ import {
   ApiBadRequestResponse,
   ApiUnauthorizedResponse,
   ApiTooManyRequestsResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, GoogleAuthDto, AppleAuthDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
-import { LocalAuthGuard } from './guards';
+import { RegisterDto, LoginDto, RefreshTokenDto, GoogleAuthDto, AppleAuthDto, ForgotPasswordDto, ResetPasswordDto, LogoutDto, ChangePasswordDto } from './dto';
+import { LocalAuthGuard, JwtAuthGuard } from './guards';
 import { CurrentUser } from './decorators';
 import { User } from '../users/entities/user.entity';
+import { NoGuestGuard } from '../../common/guards';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -112,5 +114,30 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Refresh token invalid or expired' })
   async refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout — revoke refresh token' })
+  @ApiBody({ type: LogoutDto })
+  @ApiOkResponse({ description: 'Logged out successfully' })
+  @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+  async logout(@Body() dto: LogoutDto) {
+    return this.authService.logout(dto.refreshToken);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, NoGuestGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password (requires current password)' })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiOkResponse({ description: 'Password changed — all sessions invalidated' })
+  @ApiBadRequestResponse({ description: 'Old password incorrect or social login account' })
+  @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
+  async changePassword(@CurrentUser() user: User, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, dto.oldPassword, dto.newPassword);
   }
 }

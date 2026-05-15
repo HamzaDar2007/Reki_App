@@ -310,7 +310,7 @@ export class BusinessService {
     };
   }
 
-  async updateVenue(venueId: string, businessUserId: string, data: any) {
+  async updateVenue(venueId: string, businessUserId: string, data: any, newImageUrls: string[] = []) {
     await this.verifyOwnership(venueId, businessUserId);
 
     const venue = await this.venuesRepository.findOne({ where: { id: venueId } });
@@ -319,6 +319,20 @@ export class BusinessService {
     if (data?.category) {
       data.category = this.normalizeVenueCategory(data.category);
     }
+
+    // Parse tags if sent as JSON string
+    if (data?.tags && typeof data.tags === 'string') {
+      try { data.tags = JSON.parse(data.tags); } catch { /* ignore */ }
+    }
+
+    // Append new uploaded images to existing
+    if (newImageUrls.length > 0) {
+      data.images = [...(venue.images || []), ...newImageUrls];
+    }
+
+    // Remove fields that should not be directly assigned
+    delete data.appendImages;
+
     Object.assign(venue, data);
     const saved = await this.venuesRepository.save(venue);
 

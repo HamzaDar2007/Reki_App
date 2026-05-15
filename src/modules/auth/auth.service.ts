@@ -11,7 +11,7 @@ import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { RegisterDto } from './dto';
-import { Role, AuthProvider, NotificationType } from '../../common/enums';
+import { Role, AuthProvider, NotificationType, ErrorCode } from '../../common/enums';
 import { EmailService } from '../email/email.service';
 
 @Injectable()
@@ -300,6 +300,48 @@ export class AuthService {
     await this.usersRepository.save(user);
 
     return { message: 'Email verified successfully' };
+  }
+
+  async logout(refreshTokenStr: string) {
+    const stored = await this.refreshTokensRepository.findOne({
+      where: { token: refreshTokenStr },
+    });
+    if (stored && !stored.isRevoked) {
+      stored.isRevoked = true;
+      await this.refreshTokensRepository.save(stored);
+    }
+    return { success: true, message: 'Logged out successfully' };
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    if (!user.password) {
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Cannot change password for social login accounts. Use forgot password instead.',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_PASSWORD,
+        message: 'Current password is incorrect',
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await this.usersRepository.save(user);
+
+    // Revoke all active refresh tokens for this user
+    await this.refreshTokensRepository.update(
+      { userId: user.id, isRevoked: false },
+      { isRevoked: true },
+    );
+
+    return { success: true, message: 'Password changed successfully. Please log in again.' };
   }
 
   async refreshToken(refreshTokenStr: string) {

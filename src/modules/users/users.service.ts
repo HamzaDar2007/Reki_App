@@ -138,4 +138,21 @@ export class UsersService {
       avatar: user.avatar || null,
     };
   }
+
+  async deleteAccount(userId: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    // Delete FK-dependent records before removing the user
+    const mgr = this.usersRepository.manager;
+    await mgr.query(`DELETE FROM notifications WHERE "userId" = $1`, [userId]);
+    await mgr.query(`DELETE FROM refresh_tokens WHERE "userId" = $1`, [userId]);
+    await mgr.query(`DELETE FROM redemptions WHERE "userId" = $1`, [userId]);
+    await mgr.query(`DELETE FROM devices WHERE "userId" = $1`, [userId]);
+    await mgr.query(`DELETE FROM notification_preferences WHERE "userId" = $1`, [userId]);
+
+    await this.usersRepository.remove(user);
+
+    return { success: true, message: 'Account deleted successfully' };
+  }
 }
