@@ -28,6 +28,7 @@ import { LiveModule } from './modules/live/live.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { CronModule } from './modules/cron/cron.module';
 import { SeedModule } from './seed/seed.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { SeedModule } from './seed/seed.module';
     LiveModule,
     CronModule,
     SeedModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [

@@ -72,9 +72,24 @@ export class DevicesService {
   async getPreferences(userId: string): Promise<NotificationPreference> {
     let prefs = await this.prefRepository.findOne({ where: { userId } });
     if (!prefs) {
-      // Create default preferences
+      // Attempt to create default preferences — may fail if userId is a business user
+      // (FK constraint: notification_preferences.userId → users.id)
       prefs = this.prefRepository.create({ userId });
-      prefs = await this.prefRepository.save(prefs);
+      try {
+        prefs = await this.prefRepository.save(prefs);
+      } catch {
+        // FK violation: userId not in users table (e.g. business user)
+        // Return in-memory defaults without persisting
+        prefs.vibeAlerts = true;
+        prefs.livePerformance = true;
+        prefs.socialCheckins = true;
+        prefs.offerAlerts = true;
+        prefs.weeklyRecap = true;
+        prefs.proximityAlerts = true;
+        prefs.quietHoursStart = null;
+        prefs.quietHoursEnd = null;
+        return prefs;
+      }
     }
     return prefs;
   }
@@ -89,7 +104,12 @@ export class DevicesService {
     } else {
       Object.assign(prefs, dto);
     }
-    return this.prefRepository.save(prefs);
+    try {
+      return await this.prefRepository.save(prefs);
+    } catch {
+      // FK violation: business user or non-existent userId
+      return prefs;
+    }
   }
 
   /**

@@ -16,6 +16,7 @@ export default registerAs('app', () => ({
   weatherApiKey: process.env.WEATHER_API_KEY,
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
+    androidClientId: process.env.GOOGLE_ANDROID_CLIENT_ID,
   },
   apple: {
     clientId: process.env.APPLE_CLIENT_ID,
@@ -39,5 +40,12 @@ export default registerAs('app', () => ({
     smtpPort: parseInt(process.env.SMTP_PORT, 10) || 587,
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
+  },
+  s3: {
+    region: process.env.AWS_S3_REGION || 'eu-west-2',
+    bucket: process.env.AWS_S3_BUCKET || 'reki-bucket',
+    accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY,
+    maxFileSizeMb: parseInt(process.env.AWS_S3_MAX_FILE_SIZE_MB, 10) || 5,
   },
 }));

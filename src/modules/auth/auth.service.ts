@@ -90,8 +90,13 @@ export class AuthService {
   }
 
   async googleAuth(idToken: string) {
-    const clientId = this.configService.get<string>('app.google.clientId');
-    if (!clientId) {
+    const webClientId = this.configService.get<string>('app.google.clientId');
+    const androidClientId = this.configService.get<string>('app.google.androidClientId');
+    
+    // Support both web and android client IDs
+    const validClientIds = [webClientId, androidClientId].filter(Boolean);
+    
+    if (validClientIds.length === 0) {
       throw new BadRequestException('Google OAuth is not configured. Please set GOOGLE_CLIENT_ID in environment variables.');
     }
 
@@ -99,7 +104,7 @@ export class AuthService {
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        audience: clientId,
+        audience: validClientIds, // Accept both web and android client IDs
       });
       decoded = ticket.getPayload();
     } catch (err) {

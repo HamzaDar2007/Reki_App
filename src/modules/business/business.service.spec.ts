@@ -314,4 +314,164 @@ describe('BusinessService', () => {
       expect(result.message).toBe('Offer deleted');
     });
   });
+
+  describe('createVenue', () => {
+    const createDto = {
+      name: 'The Blue Moon Bar',
+      address: '123 Oxford Road, Manchester',
+      city: 'Manchester',
+      area: 'City Centre',
+      category: 'bar',
+      lat: 53.4808,
+      lng: -2.2426,
+      priceLevel: 2,
+      openingHours: '18:00',
+      closingTime: '02:00',
+      tags: ['Chill', 'Party'],
+      images: ['https://example.com/image1.jpg'],
+    };
+
+    beforeEach(() => {
+      activityLogsRepo.create.mockReturnValue({});
+      activityLogsRepo.save.mockResolvedValue({});
+    });
+
+    it('should create a venue and persist images', async () => {
+      const savedVenue = { id: 'new-venue', ...createDto, category: 'bar' };
+      venuesRepo.create.mockReturnValue(savedVenue);
+      venuesRepo.save.mockResolvedValue(savedVenue);
+      busynessRepo.create.mockReturnValue({});
+      busynessRepo.save.mockResolvedValue({});
+      vibesRepo.create.mockReturnValue({});
+      vibesRepo.save.mockResolvedValue({});
+
+      const result = await service.createVenue('biz-1', createDto as any);
+
+      expect(result.success).toBe(true);
+      expect(result.venue.id).toBe('new-venue');
+      // verify images were passed to repository.create
+      expect(venuesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ images: ['https://example.com/image1.jpg'] }),
+      );
+    });
+
+    it('should default images to empty array when not provided', async () => {
+      const dtoWithoutImages = { ...createDto, images: undefined };
+      const savedVenue = { id: 'new-venue', ...dtoWithoutImages, images: [] };
+      venuesRepo.create.mockReturnValue(savedVenue);
+      venuesRepo.save.mockResolvedValue(savedVenue);
+      busynessRepo.create.mockReturnValue({});
+      busynessRepo.save.mockResolvedValue({});
+      vibesRepo.create.mockReturnValue({});
+      vibesRepo.save.mockResolvedValue({});
+
+      await service.createVenue('biz-1', dtoWithoutImages as any);
+
+      expect(venuesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ images: [] }),
+      );
+    });
+  });
+
+  describe('getMyVenues', () => {
+    it('should return venues with images field included', async () => {
+      const venueWithImages = {
+        id: 'venue-1',
+        name: 'The Blue Moon Bar',
+        address: '123 Oxford Road, Manchester',
+        city: 'Manchester',
+        area: 'City Centre',
+        category: 'bar',
+        lat: 53.4808,
+        lng: -2.2426,
+        images: ['https://example.com/image1.jpg'],
+        priceLevel: 2,
+        openingHours: '18:00',
+        closingTime: '02:00',
+        tags: ['Chill', 'Party'],
+        rating: 4.0,
+        isLive: false,
+        businessUserId: 'biz-1',
+        busyness: { level: 'quiet', percentage: 25 },
+        vibe: { tags: [] },
+        createdAt: new Date('2026-05-13T11:47:34.214Z'),
+      };
+      venuesRepo.find = jest.fn().mockResolvedValue([venueWithImages]);
+
+      const result = await service.getMyVenues('biz-1');
+
+      expect(result.total).toBe(1);
+      expect(result.venues[0]).toHaveProperty('images');
+      expect(result.venues[0].images).toEqual(['https://example.com/image1.jpg']);
+    });
+
+    it('should return empty images array when venue has no images', async () => {
+      const venueWithNoImages = {
+        id: 'venue-2',
+        name: 'Test Venue',
+        address: '1 Test St',
+        city: 'Manchester',
+        area: 'Test Area',
+        category: 'bar',
+        lat: 53.48,
+        lng: -2.24,
+        images: [],
+        priceLevel: 1,
+        openingHours: '12:00',
+        closingTime: '23:00',
+        tags: [],
+        rating: 0,
+        isLive: false,
+        businessUserId: 'biz-1',
+        busyness: { level: 'quiet', percentage: 0 },
+        vibe: { tags: [] },
+        createdAt: new Date(),
+      };
+      venuesRepo.find = jest.fn().mockResolvedValue([venueWithNoImages]);
+
+      const result = await service.getMyVenues('biz-1');
+
+      expect(result.venues[0]).toHaveProperty('images');
+      expect(result.venues[0].images).toEqual([]);
+    });
+
+    it('should return all required fields including lat, lng, priceLevel, openingHours, closingTime, tags, rating', async () => {
+      const venue = {
+        id: 'venue-1',
+        name: 'The Blue Moon Bar',
+        address: '123 Oxford Road',
+        city: 'Manchester',
+        area: 'City Centre',
+        category: 'bar',
+        lat: 53.4808,
+        lng: -2.2426,
+        images: ['https://example.com/img.jpg'],
+        priceLevel: 2,
+        openingHours: '18:00',
+        closingTime: '02:00',
+        tags: ['Chill'],
+        rating: 4.5,
+        isLive: false,
+        businessUserId: 'biz-1',
+        busyness: { level: 'busy', percentage: 70 },
+        vibe: { tags: ['Party'] },
+        createdAt: new Date(),
+      };
+      venuesRepo.find = jest.fn().mockResolvedValue([venue]);
+
+      const result = await service.getMyVenues('biz-1');
+      const v = result.venues[0];
+
+      expect(v).toHaveProperty('lat', 53.4808);
+      expect(v).toHaveProperty('lng', -2.2426);
+      expect(v).toHaveProperty('images', ['https://example.com/img.jpg']);
+      expect(v).toHaveProperty('priceLevel', 2);
+      expect(v).toHaveProperty('openingHours', '18:00');
+      expect(v).toHaveProperty('closingTime', '02:00');
+      expect(v).toHaveProperty('tags', ['Chill']);
+      expect(v).toHaveProperty('rating', 4.5);
+      expect(v.busyness).toEqual({ level: 'busy', percentage: 70 });
+      expect(v.vibe).toEqual({ tags: ['Party'] });
+    });
+  });
 });
