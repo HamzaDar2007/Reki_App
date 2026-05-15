@@ -103,6 +103,7 @@ export class UsersService {
       name: user.name,
       email: user.email,
       phone: user.phone,
+      avatar: user.avatar || null,
       authProvider: user.authProvider,
       isVerified: user.isVerified,
       preferences: user.preferences || { vibes: [], music: [] },
@@ -116,6 +117,25 @@ export class UsersService {
       },
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+    };
+  }
+
+  async updateProfile(userId: string, name?: string, phone?: string, avatarUrl?: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (name !== undefined) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (avatarUrl !== undefined) user.avatar = avatarUrl;
+
+    await this.usersRepository.save(user);
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar || null,
     };
   }
 }

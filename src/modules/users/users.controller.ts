@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -11,13 +13,15 @@ import {
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiBadRequestResponse,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards';
 import { NoGuestGuard } from '../../common/guards';
 import { CurrentUser } from '../auth/decorators';
 import { User } from './entities/user.entity';
-import { UpdatePreferencesDto } from './dto';
+import { UpdatePreferencesDto, UpdateProfileDto } from './dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -25,7 +29,10 @@ import { UpdatePreferencesDto } from './dto';
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get current user preferences' })
@@ -108,5 +115,35 @@ export class UsersController {
   @ApiOkResponse({ description: 'User profile including location data, preferences, and saved venues count' })
   async getProfile(@CurrentUser() user: User) {
     return this.usersService.getProfile(user.id);
+  }
+
+  @Put('profile')
+  @UseGuards(NoGuestGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Update user profile (name, phone, avatar image)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'Alex Johnson' },
+        phone: { type: 'string', example: '+447911123456' },
+        avatar: { type: 'string', format: 'binary', description: 'Profile image (jpg/png/webp, max 5MB)' },
+      },
+    },
+  })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  @ApiForbiddenResponse({ description: 'Guest users cannot update profile' })
+  @UseInterceptors(FileInterceptor('avatar', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  async updateProfile(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateProfileDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    let avatarUrl: string | undefined;
+    if (file) {
+      const { url } = await this.uploadService.uploadImage(file, 'avatars');
+      avatarUrl = url;
+    }
+    return this.usersService.updateProfile(user.id, dto.name, dto.phone, avatarUrl);
   }
 }

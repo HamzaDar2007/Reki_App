@@ -32,6 +32,9 @@ export class BusinessUser {
   @Column({ nullable: true })
   phone: string;
 
+  @Column({ nullable: true })
+  avatar: string;
+
   @Column({ default: false })
   isApproved: boolean;
 

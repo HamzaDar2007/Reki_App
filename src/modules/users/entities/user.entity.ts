@@ -25,6 +25,9 @@ export class User {
   name: string;
 
   @Column({ nullable: true })
+  avatar: string;
+
+  @Column({ nullable: true })
   password: string;
 
   @Column({ type: 'enum', enum: AuthProvider, default: AuthProvider.EMAIL })

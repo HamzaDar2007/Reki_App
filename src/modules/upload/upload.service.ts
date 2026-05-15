@@ -9,10 +9,11 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 @Injectable()
 export class UploadService {
-  private s3: S3Client;
+  private s3: S3Client | null;
   private bucket: string;
   private region: string;
   private maxFileSizeBytes: number;
+  private isConfigured: boolean;
 
   constructor(private configService: ConfigService) {
     this.region = this.configService.get<string>('app.s3.region');
@@ -20,13 +21,18 @@ export class UploadService {
     const maxMb = this.configService.get<number>('app.s3.maxFileSizeMb') || 5;
     this.maxFileSizeBytes = maxMb * 1024 * 1024;
 
-    this.s3 = new S3Client({
-      region: this.region,
-      credentials: {
-        accessKeyId: this.configService.get<string>('app.s3.accessKeyId'),
-        secretAccessKey: this.configService.get<string>('app.s3.secretAccessKey'),
-      },
-    });
+    const accessKeyId = this.configService.get<string>('app.s3.accessKeyId');
+    const secretAccessKey = this.configService.get<string>('app.s3.secretAccessKey');
+    this.isConfigured = !!(accessKeyId && secretAccessKey && this.bucket);
+
+    if (this.isConfigured) {
+      this.s3 = new S3Client({
+        region: this.region,
+        credentials: { accessKeyId, secretAccessKey },
+      });
+    } else {
+      this.s3 = null;
+    }
   }
 
   async uploadImage(file: Express.Multer.File, folder = 'images'): Promise<{ url: string; key: string }> {
@@ -34,6 +40,11 @@ export class UploadService {
 
     const ext = path.extname(file.originalname).toLowerCase();
     const key = `${folder}/${uuidv4()}${ext}`;
+
+    if (!this.isConfigured) {
+      // Dev stub — S3 not configured, return a placeholder URL
+      return { url: `https://placeholder.reki.dev/${key}`, key };
+    }
 
     try {
       await this.s3.send(

@@ -175,6 +175,48 @@ export class BusinessService {
     return { message: 'Password reset successful' };
   }
 
+  // ─── PROFILE ───────────────────────────────────────────
+
+  async getBusinessProfile(businessUserId: string) {
+    const businessUser = await this.businessUsersRepository.findOne({
+      where: { id: businessUserId },
+      relations: ['venues'],
+    });
+    if (!businessUser) throw new NotFoundException('Business user not found');
+
+    return {
+      id: businessUser.id,
+      email: businessUser.email,
+      name: businessUser.name,
+      phone: businessUser.phone || null,
+      avatar: businessUser.avatar || null,
+      role: businessUser.role,
+      isApproved: businessUser.isApproved,
+      venues: (businessUser.venues || []).map(v => ({ id: v.id, name: v.name, address: v.address })),
+      createdAt: businessUser.createdAt,
+      updatedAt: businessUser.updatedAt,
+    };
+  }
+
+  async updateBusinessProfile(businessUserId: string, name?: string, phone?: string, avatarUrl?: string) {
+    const businessUser = await this.businessUsersRepository.findOne({ where: { id: businessUserId } });
+    if (!businessUser) throw new NotFoundException('Business user not found');
+
+    if (name !== undefined) businessUser.name = name;
+    if (phone !== undefined) businessUser.phone = phone;
+    if (avatarUrl !== undefined) businessUser.avatar = avatarUrl;
+
+    await this.businessUsersRepository.save(businessUser);
+
+    return {
+      id: businessUser.id,
+      email: businessUser.email,
+      name: businessUser.name,
+      phone: businessUser.phone || null,
+      avatar: businessUser.avatar || null,
+    };
+  }
+
   // ─── VENUE MANAGEMENT ──────────────────────────────────
 
   async createVenue(businessUserId: string, dto: any) {

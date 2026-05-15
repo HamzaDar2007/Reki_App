@@ -10,10 +10,11 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiBody, ApiOkResponse, ApiCreatedResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiConsumes } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
@@ -82,6 +83,45 @@ export class BusinessController {
   }
 
   // ─── VENUE MANAGEMENT ──────────────────────────────────
+
+  @Get('business/profile')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get business user profile' })
+  @ApiOkResponse({ description: 'Business profile with venue list' })
+  async getProfile(@CurrentUser() user: any) {
+    return this.businessService.getBusinessProfile(user.id);
+  }
+
+  @Put('business/profile')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Update business profile (name, phone, avatar)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'The Blue Moon Group' },
+        phone: { type: 'string', example: '+447911123456' },
+        avatar: { type: 'string', format: 'binary', description: 'Profile image (jpg/png/webp, max 5MB)' },
+      },
+    },
+  })
+  @ApiOkResponse({ description: 'Profile updated' })
+  @UseInterceptors(FileInterceptor('avatar', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() body: { name?: string; phone?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    let avatarUrl: string | undefined;
+    if (file) {
+      const { url } = await this.uploadService.uploadImage(file, 'avatars');
+      avatarUrl = url;
+    }
+    return this.businessService.updateBusinessProfile(user.id, body.name, body.phone, avatarUrl);
+  }
 
   @Post('business/venues')
   @UseGuards(JwtAuthGuard, BusinessGuard)

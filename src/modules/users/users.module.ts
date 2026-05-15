@@ -4,9 +4,10 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 import { Redemption } from '../offers/entities/redemption.entity';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Redemption])],
+  imports: [TypeOrmModule.forFeature([User, Redemption]), UploadModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],
