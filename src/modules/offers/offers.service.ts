@@ -202,23 +202,29 @@ export class OffersService {
     const wwdrPath = this.configService.get<string>('app.apple.passWwdrPath');
     const keyPassword = this.configService.get<string>('app.apple.passKeyPassword');
 
-    // Validate configuration
-    if (!teamId || !passTypeId) {
-      throw new Error(
-        'Apple Wallet configuration incomplete. Please set APPLE_TEAM_ID and APPLE_PASS_TYPE_ID in environment variables.'
-      );
-    }
-
-    if (!certPath || !keyPath || !wwdrPath) {
-      throw new Error(
-        'Apple Wallet certificate paths not configured. Please set APPLE_PASS_CERT_PATH, APPLE_PASS_KEY_PATH, and APPLE_PASS_WWDR_PATH in environment variables.'
-      );
+    // If Apple Wallet is not configured, return a mock stub for development/demo
+    const isConfigured = teamId && passTypeId && certPath && keyPath && wwdrPath;
+    if (!isConfigured) {
+      const stub = {
+        _note: 'Apple Wallet not configured — development stub',
+        passType: 'coupon',
+        offerTitle: offer.title,
+        venue: offer.venue?.name || 'REKI Venue',
+        voucherCode,
+        offerId: offer.id,
+        barcode: {
+          format: 'QR',
+          message: `reki://offer/${offer.id}/${voucherCode}`,
+        },
+        instructions: 'Set APPLE_TEAM_ID, APPLE_PASS_TYPE_ID, APPLE_PASS_CERT_PATH, APPLE_PASS_KEY_PATH, APPLE_PASS_WWDR_PATH to generate a real .pkpass file.',
+      };
+      return Buffer.from(JSON.stringify(stub));
     }
 
     // Check if certificate files exist
-    const certFullPath = path.resolve(certPath);
-    const keyFullPath = path.resolve(keyPath);
-    const wwdrFullPath = path.resolve(wwdrPath);
+    const certFullPath = path.resolve(certPath!);
+    const keyFullPath = path.resolve(keyPath!);
+    const wwdrFullPath = path.resolve(wwdrPath!);
 
     if (!fs.existsSync(certFullPath)) {
       throw new Error(

@@ -217,7 +217,7 @@ export class OffersController {
 
     const claim = await this.offersService.findActiveClaimByUser(id, user.id);
     if (!claim) {
-      throw new BadRequestException('You must claim this offer first');
+      throw new BadRequestException({ code: ErrorCode.OFFER_NOT_CLAIMED, message: 'You must claim this offer first' });
     }
 
     const passBuffer = await this.offersService.generateAppleWalletPass(offer, claim.voucherCode);
