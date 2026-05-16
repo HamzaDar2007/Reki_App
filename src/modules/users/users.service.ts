@@ -120,13 +120,27 @@ export class UsersService {
     };
   }
 
-  async updateProfile(userId: string, name?: string, phone?: string, avatarUrl?: string) {
+  async updateProfile(
+    userId: string,
+    name?: string,
+    phone?: string,
+    avatarUrl?: string,
+    currentLat?: number,
+    currentLng?: number,
+    locationEnabled?: boolean,
+    backgroundLocationEnabled?: boolean,
+  ) {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
     if (name !== undefined) user.name = name;
     if (phone !== undefined) user.phone = phone;
     if (avatarUrl !== undefined) user.avatar = avatarUrl;
+    if (currentLat !== undefined) user.currentLat = currentLat;
+    if (currentLng !== undefined) user.currentLng = currentLng;
+    if (locationEnabled !== undefined) user.locationEnabled = locationEnabled;
+    if (backgroundLocationEnabled !== undefined) user.backgroundLocationEnabled = backgroundLocationEnabled;
+    if (currentLat !== undefined || currentLng !== undefined) user.locationUpdatedAt = new Date();
 
     await this.usersRepository.save(user);
 
@@ -136,6 +150,13 @@ export class UsersService {
       email: user.email,
       phone: user.phone,
       avatar: user.avatar || null,
+      location: {
+        currentLat: user.currentLat,
+        currentLng: user.currentLng,
+        locationUpdatedAt: user.locationUpdatedAt,
+        locationEnabled: user.locationEnabled,
+        backgroundLocationEnabled: user.backgroundLocationEnabled,
+      },
     };
   }
 

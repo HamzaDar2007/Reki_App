@@ -120,13 +120,17 @@ export class UsersController {
   @Put('profile')
   @UseGuards(NoGuestGuard)
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Update user profile (name, phone, avatar image)' })
+  @ApiOperation({ summary: 'Update user profile (name, phone, avatar, location)' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         name: { type: 'string', example: 'Alex Johnson' },
         phone: { type: 'string', example: '+447911123456' },
+        currentLat: { type: 'number', example: 53.4808, description: 'Current latitude' },
+        currentLng: { type: 'number', example: -2.2426, description: 'Current longitude' },
+        locationEnabled: { type: 'boolean', example: true, description: 'Enable location tracking' },
+        backgroundLocationEnabled: { type: 'boolean', example: false, description: 'Enable background location' },
         avatar: { type: 'string', format: 'binary', description: 'Profile image (jpg/png/webp, max 5MB)' },
       },
     },
@@ -144,7 +148,16 @@ export class UsersController {
       const { url } = await this.uploadService.uploadImage(file, 'avatars');
       avatarUrl = url;
     }
-    return this.usersService.updateProfile(user.id, dto.name, dto.phone, avatarUrl);
+    return this.usersService.updateProfile(
+      user.id,
+      dto.name,
+      dto.phone,
+      avatarUrl,
+      dto.currentLat,
+      dto.currentLng,
+      dto.locationEnabled,
+      dto.backgroundLocationEnabled,
+    );
   }
 
   @Delete('account')
