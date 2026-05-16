@@ -364,6 +364,7 @@ export class BusinessController {
       maxRedemptions: dto.maxRedemptions || 100,
       savingValue: dto.savingValue,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      isAvailableNow: dto.isAvailableNow ?? false,
     } as any);
   }
 

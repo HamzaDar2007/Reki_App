@@ -62,6 +62,11 @@ export class CreateOfferDto {
   @IsOptional()
   @IsString()
   expiresAt?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether this offer is available right now (manual toggle)' })
+  @IsOptional()
+  @IsBoolean()
+  isAvailableNow?: boolean;
 }
 
 export class UpdateOfferDto {

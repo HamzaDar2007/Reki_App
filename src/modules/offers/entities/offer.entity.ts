@@ -48,6 +48,9 @@ export class Offer {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ default: false })
+  isAvailableNow: boolean;
+
   @Column({ type: 'int', default: 0 })
   redemptionCount: number;
 
