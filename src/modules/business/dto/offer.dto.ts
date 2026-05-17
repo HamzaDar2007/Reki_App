@@ -48,10 +48,10 @@ export class CreateOfferDto {
   @IsString()
   validTimeEnd: string;
 
-  @ApiPropertyOptional({ example: 100 })
+  @ApiPropertyOptional({ example: 100, description: '0 = unlimited' })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   maxRedemptions?: number;
 
   @ApiPropertyOptional({ example: 9.0 })
@@ -102,10 +102,10 @@ export class UpdateOfferDto {
   @IsString()
   validTimeEnd?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: '0 = unlimited' })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   maxRedemptions?: number;
 
   @ApiPropertyOptional()
@@ -116,6 +116,11 @@ export class UpdateOfferDto {
   @IsOptional()
   @IsString()
   expiresAt?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether this offer is available right now (manual toggle)' })
+  @IsOptional()
+  @IsBoolean()
+  isAvailableNow?: boolean;
 }
 
 export class ToggleOfferDto {

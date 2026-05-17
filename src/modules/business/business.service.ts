@@ -632,14 +632,31 @@ export class BusinessService {
     return { success: true, offer: saved };
   }
 
-  async updateOffer(offerId: string, businessUserId: string, data: Partial<Offer>) {
+  async updateOffer(offerId: string, businessUserId: string, data: any) {
     const offer = await this.offersRepository.findOne({ where: { id: offerId } });
     if (!offer) throw new NotFoundException('Offer not found');
 
     await this.verifyOwnership(offer.venueId, businessUserId);
 
-    Object.assign(offer, data);
-    const saved = await this.offersRepository.save(offer);
+    const { expiresAt: expiresAtRaw, ...rest } = data;
+
+    // Only include defined, non-null fields
+    const updatePayload: any = {};
+    for (const [key, val] of Object.entries(rest)) {
+      if (val !== undefined) updatePayload[key] = val;
+    }
+
+    // Handle expiresAt: only set if a valid date string is provided
+    if (expiresAtRaw !== undefined) {
+      const parsed = new Date(expiresAtRaw);
+      if (!isNaN(parsed.getTime())) {
+        updatePayload.expiresAt = parsed;
+      }
+      // invalid date string → skip expiresAt entirely
+    }
+
+    await this.offersRepository.update(offerId, updatePayload);
+    const saved = await this.offersRepository.findOne({ where: { id: offerId } });
 
     return { success: true, offer: saved };
   }
