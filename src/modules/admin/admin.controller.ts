@@ -59,6 +59,17 @@ export class AdminController {
     );
   }
 
+  @Get('users/:id')
+  @ApiOperation({ summary: 'Get single user by ID (admin only)' })
+  @ApiParam({ name: 'id', description: 'User UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'User detail' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  async getUserById(@Param('id') id: string) {
+    const user = await this.adminService.getUserById(id);
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
   @Get('users/:id/activity')
   @ApiOperation({ summary: 'Get user activity — login history, redemptions (admin only)' })
   @ApiParam({ name: 'id', description: 'User UUID', format: 'uuid' })

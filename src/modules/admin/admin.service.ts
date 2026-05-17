@@ -109,6 +109,14 @@ export class AdminService {
     return { users, ...paginate(users, total, page, limit).pagination };
   }
 
+  async getUserById(userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'email', 'name', 'role', 'authProvider', 'isVerified', 'isActive', 'createdAt', 'locationEnabled', 'backgroundLocationEnabled'],
+    });
+    return user ?? null;
+  }
+
   async getUserActivity(userId: string) {
     const user = await this.usersRepository.findOne({
       where: { id: userId },

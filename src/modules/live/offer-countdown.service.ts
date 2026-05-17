@@ -1,13 +1,13 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Offer } from '../offers/entities/offer.entity';
 import { LiveGateway } from './live.gateway';
+import { Interval } from '@nestjs/schedule';
 
 @Injectable()
-export class OfferCountdownService implements OnModuleInit, OnModuleDestroy {
+export class OfferCountdownService {
   private readonly logger = new Logger(OfferCountdownService.name);
-  private countdownInterval: ReturnType<typeof setInterval>;
 
   constructor(
     @InjectRepository(Offer)
@@ -15,19 +15,8 @@ export class OfferCountdownService implements OnModuleInit, OnModuleDestroy {
     private readonly liveGateway: LiveGateway,
   ) {}
 
-  onModuleInit() {
-    // Check offer countdowns every 60 seconds
-    this.countdownInterval = setInterval(() => this.checkOfferCountdowns(), 60000);
-    this.logger.log('Offer countdown service started (checking every 60s)');
-  }
-
-  onModuleDestroy() {
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-    }
-  }
-
-  private async checkOfferCountdowns(): Promise<void> {
+  @Interval(60000)
+  async checkOfferCountdowns(): Promise<void> {
     try {
       const activeOffers = await this.offerRepository.find({
         where: { isActive: true },
