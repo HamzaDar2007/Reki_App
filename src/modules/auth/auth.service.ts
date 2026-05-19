@@ -230,9 +230,16 @@ export class AuthService {
     // Send password reset email via configured email provider
     await this.emailService.sendPasswordResetEmail(email, resetToken, user.name);
 
-    return {
+    const response: Record<string, string> = {
       message: 'If the email exists, a reset link has been sent.',
     };
+
+    // In development, expose the token directly so it can be tested without email
+    if (this.configService.get<string>('app.nodeEnv') !== 'production') {
+      response.resetToken = resetToken;
+    }
+
+    return response;
   }
 
   async resetPassword(token: string, newPassword: string) {

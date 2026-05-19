@@ -441,14 +441,40 @@ export class BusinessService {
   async getAnalytics(venueId: string, businessUserId: string, period?: string) {
     await this.verifyOwnership(venueId, businessUserId);
 
-    const analytics = await this.getTodayAnalytics(venueId);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+
+    // All-time saves: count users who currently have this venue saved
+    const allTimeSaves = await this.usersRepository
+      .createQueryBuilder('user')
+      .where(':venueId = ANY(user.savedVenues)', { venueId })
+      .getCount();
+
+    const [today, yesterday] = await Promise.all([
+      this.venueAnalyticsRepository.findOne({ where: { venueId, date: todayStr } }),
+      this.venueAnalyticsRepository.findOne({ where: { venueId, date: yesterdayStr } }),
+    ]);
 
     return {
-      views: { total: analytics?.totalViews || 0, change: '+15%' },
-      saves: { total: analytics?.totalSaves || 0, change: '+8%' },
-      offerClicks: { total: analytics?.offerClicks || 0, change: '+22%' },
-      redemptions: { total: analytics?.redemptions || 0, change: '+5%' },
+      views: { total: today?.totalViews || 0, change: this.calcChange(today?.totalViews || 0, yesterday?.totalViews || 0) },
+      saves: {
+        today: today?.totalSaves || 0,
+        allTime: allTimeSaves,
+        change: this.calcChange(today?.totalSaves || 0, yesterday?.totalSaves || 0),
+      },
+      offerClicks: { total: today?.offerClicks || 0, change: this.calcChange(today?.offerClicks || 0, yesterday?.offerClicks || 0) },
+      redemptions: { total: today?.redemptions || 0, change: this.calcChange(today?.redemptions || 0, yesterday?.redemptions || 0) },
     };
+  }
+
+  private calcChange(today: number, yesterday: number): string {
+    if (yesterday === 0) return today > 0 ? 'new' : '→';
+    const pct = Math.round(((today - yesterday) / yesterday) * 100);
+    if (pct > 0) return `+${pct}%`;
+    if (pct < 0) return `${pct}%`;
+    return '→';
   }
 
   // ─── VENUE STATUS ──────────────────────────────────────

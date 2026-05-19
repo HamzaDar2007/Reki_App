@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Offer } from './entities/offer.entity';
 import { Redemption } from './entities/redemption.entity';
+import { VenueAnalytics } from '../business/entities/venue-analytics.entity';
 import { OfferStatus, RedemptionStatus } from '../../common/enums';
 import { generateVoucherCode, generateTransactionId } from '../../common/utils/generators.util';
 import { PKPass } from 'passkit-generator';
@@ -17,8 +18,20 @@ export class OffersService {
     private offersRepository: Repository<Offer>,
     @InjectRepository(Redemption)
     private redemptionsRepository: Repository<Redemption>,
+    @InjectRepository(VenueAnalytics)
+    private analyticsRepository: Repository<VenueAnalytics>,
     private configService: ConfigService,
   ) { }
+
+  private async incrementAnalytic(venueId: string, field: 'totalSaves' | 'offerClicks' | 'redemptions', delta = 1): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    let analytics = await this.analyticsRepository.findOne({ where: { venueId, date: today } });
+    if (!analytics) {
+      analytics = this.analyticsRepository.create({ venueId, date: today });
+    }
+    analytics[field] = Math.max(0, (analytics[field] || 0) + delta);
+    await this.analyticsRepository.save(analytics);
+  }
 
   async findById(id: string): Promise<Offer | null> {
     return this.offersRepository.findOne({ where: { id }, relations: ['venue'] });
@@ -60,6 +73,15 @@ export class OffersService {
     // Rule 1: must be active
     if (!offer.isActive) return false;
 
+    // Rule 5: not expired (always applies)
+    if (offer.expiresAt && now > new Date(offer.expiresAt)) return false;
+
+    // Rule 4: max redemptions not reached (0 = unlimited)
+    if (offer.maxRedemptions > 0 && offer.redemptionCount >= offer.maxRedemptions) return false;
+
+    // isAvailableNow flag: business owner override — skip time/day checks
+    if (offer.isAvailableNow) return true;
+
     // Rule 2: check valid day
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const today = days[now.getDay()];
@@ -82,12 +104,6 @@ export class OffersService {
         }
       }
     }
-
-    // Rule 4: max redemptions not reached
-    if (offer.redemptionCount >= offer.maxRedemptions) return false;
-
-    // Rule 5: not expired
-    if (offer.expiresAt && now > new Date(offer.expiresAt)) return false;
 
     return true;
   }
@@ -186,7 +202,20 @@ export class OffersService {
     // Increment offer redemption count
     await this.offersRepository.increment({ id: redemption.offerId }, 'redemptionCount', 1);
 
+    // Increment venue analytics redemptions
+    await this.incrementAnalytic(redemption.venueId, 'redemptions');
+
     return this.redemptionsRepository.save(redemption);
+  }
+
+  /**
+   * Track an offer click — increments offerClicks in today's venue analytics.
+   */
+  async trackClick(offerId: string): Promise<void> {
+    const offer = await this.offersRepository.findOne({ where: { id: offerId } });
+    if (offer?.venueId) {
+      await this.incrementAnalytic(offer.venueId, 'offerClicks');
+    }
   }
 
   /**

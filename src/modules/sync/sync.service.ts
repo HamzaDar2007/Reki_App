@@ -35,6 +35,16 @@ export class SyncService {
     private analyticsRepository: Repository<VenueAnalytics>,
   ) {}
 
+  private async incrementAnalytic(venueId: string, field: 'totalSaves', delta: number): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    let analytics = await this.analyticsRepository.findOne({ where: { venueId, date: today } });
+    if (!analytics) {
+      analytics = this.analyticsRepository.create({ venueId, date: today });
+    }
+    analytics[field] = Math.max(0, (analytics[field] || 0) + delta);
+    await this.analyticsRepository.save(analytics);
+  }
+
   // ─── SYNC QUEUE PROCESSING ────────────────────────────
 
   async processSyncQueue(
@@ -266,9 +276,12 @@ export class SyncService {
       venues.push(action.venueId);
       user.savedVenues = venues;
       await this.usersRepository.save(user);
+      await this.incrementAnalytic(action.venueId, 'totalSaves', 1);
     } else if (!isSave && action.venueId) {
+      const wasSaved = venues.includes(action.venueId);
       user.savedVenues = venues.filter((id) => id !== action.venueId);
       await this.usersRepository.save(user);
+      if (wasSaved) await this.incrementAnalytic(action.venueId, 'totalSaves', -1);
     }
 
     await this.saveSyncAction(userId, deviceId, action, SyncActionStatus.SUCCESS);

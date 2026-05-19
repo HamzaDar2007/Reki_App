@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ParseUUIDPipe, Res, StreamableFile, Header } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, BadRequestException, ForbiddenException, ParseUUIDPipe, Res, StreamableFile, Header } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   ApiTags,
@@ -15,8 +15,7 @@ import {
 } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { JwtAuthGuard } from '../auth/guards';
-import { NoGuestGuard, RolesGuard } from '../../common/guards';
-import { Roles } from '../../common/decorators';
+import { NoGuestGuard } from '../../common/guards';
 import { CurrentUser } from '../auth/decorators';
 import { User } from '../users/entities/user.entity';
 import { RedeemOfferDto } from './dto/redeem-offer.dto';
@@ -101,10 +100,21 @@ export class OffersController {
     };
   }
 
+  @Post(':id/click')
+  @NoCache()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Track offer click — increments offerClicks analytics' })
+  @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'Click tracked' })
+  async trackClick(@Param('id', ParseUUIDPipe) id: string) {
+    await this.offersService.trackClick(id);
+    return { tracked: true };
+  }
+
   @Post(':id/claim')
   @NoCache()
-  @Roles(Role.USER)
-  @UseGuards(JwtAuthGuard, RolesGuard, NoGuestGuard)
+  @UseGuards(JwtAuthGuard, NoGuestGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Claim offer — generates voucher code + QR' })
   @ApiParam({ name: 'id', description: 'Offer UUID', format: 'uuid' })
@@ -112,8 +122,12 @@ export class OffersController {
   @ApiBadRequestResponse({ description: 'Offer not valid now (outside valid hours/days)' })
   @ApiNotFoundResponse({ description: 'Offer not found' })
   @ApiUnauthorizedResponse({ description: 'JWT missing or invalid' })
-  @ApiForbiddenResponse({ description: 'Guest users cannot claim offers' })
+  @ApiForbiddenResponse({ description: 'Guest and business users cannot claim offers' })
   async claim(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    if (user?.role === Role.BUSINESS) {
+      throw new ForbiddenException('Business accounts cannot claim customer offers');
+    }
+
     const offer = await this.offersService.findById(id);
     if (!offer) {
       throw new NotFoundException({ code: ErrorCode.OFFER_NOT_FOUND, message: 'Offer not found' });
