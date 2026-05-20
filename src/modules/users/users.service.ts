@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Redemption } from '../offers/entities/redemption.entity';
+import { VenueAnalytics } from '../business/entities/venue-analytics.entity';
 import { paginate } from '../../common/dto';
 
 @Injectable()
@@ -12,6 +13,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(Redemption)
     private redemptionsRepository: Repository<Redemption>,
+    @InjectRepository(VenueAnalytics)
+    private venueAnalyticsRepository: Repository<VenueAnalytics>,
   ) {}
 
   async findById(id: string): Promise<User | null> {
@@ -64,6 +67,15 @@ export class UsersService {
       venues.push(venueId);
       user.savedVenues = venues;
       await this.usersRepository.save(user);
+
+      // Track in analytics — increment today's save count
+      const today = new Date().toISOString().split('T')[0];
+      let analytics = await this.venueAnalyticsRepository.findOne({ where: { venueId, date: today } });
+      if (!analytics) {
+        analytics = this.venueAnalyticsRepository.create({ venueId, date: today });
+      }
+      analytics.totalSaves = (analytics.totalSaves || 0) + 1;
+      await this.venueAnalyticsRepository.save(analytics);
     }
 
     return { saved: true, savedVenues: user.savedVenues };
