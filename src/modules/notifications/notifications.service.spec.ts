@@ -3,10 +3,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
 import { Notification } from './entities/notification.entity';
 import { NotificationType } from '../../common/enums';
+import { PushService } from '../push/push.service';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let repo: Record<string, jest.Mock>;
+  let pushService: Partial<PushService>;
 
   const mockNotification: Partial<Notification> = {
     id: 'n-1',
@@ -28,10 +30,15 @@ describe('NotificationsService', () => {
       update: jest.fn(),
     };
 
+    pushService = {
+      sendToUser: jest.fn().mockResolvedValue({ sent: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: getRepositoryToken(Notification), useValue: repo },
+        { provide: PushService, useValue: pushService },
       ],
     }).compile();
 

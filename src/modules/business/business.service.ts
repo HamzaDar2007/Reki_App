@@ -869,6 +869,17 @@ export class BusinessService {
 
     if (notifications.length > 0) {
       await this.notificationsRepository.save(notifications);
+
+      // Send push notifications
+      await this.pushService.sendToUsers(
+        users.map((u) => u.id),
+        NotificationType.LIVE_PERFORMANCE,
+        {
+          title: `🎵 Live at ${venue.name}!`,
+          body: 'New live set starting soon. Head down for the best spot!',
+          data: { type: 'LIVE_PERFORMANCE', venueId, deepLink: `reki://venue/${venueId}` },
+        },
+      );
     }
   }
 
@@ -894,6 +905,22 @@ export class BusinessService {
 
     if (notifications.length > 0) {
       await this.notificationsRepository.save(notifications);
+
+      // Send push notifications
+      await this.pushService.sendToUsers(
+        users.map((u) => u.id),
+        data.type,
+        {
+          title: data.title,
+          body: data.message,
+          data: {
+            type: data.type,
+            venueId,
+            offerId: data.offerId,
+            deepLink: data.offerId ? `reki://offer/${data.offerId}` : `reki://venue/${venueId}`,
+          },
+        },
+      );
     }
   }
 

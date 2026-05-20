@@ -13,6 +13,7 @@ import { Notification } from '../notifications/entities/notification.entity';
 import { RegisterDto } from './dto';
 import { Role, AuthProvider, NotificationType, ErrorCode } from '../../common/enums';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AuthService {
@@ -30,6 +31,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
+    private notificationsService: NotificationsService,
   ) { }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -397,14 +399,7 @@ export class AuthService {
   }
 
   private async createWelcomeNotification(userId: string): Promise<void> {
-    const notification = this.notificationsRepository.create({
-      userId,
-      type: NotificationType.WELCOME,
-      title: 'Welcome to REKI! 🎉',
-      message: "Start exploring Manchester's best vibes. Save your favourite venues to get live alerts!",
-      icon: '🎉',
-    });
-    await this.notificationsRepository.save(notification);
+    await this.notificationsService.createWelcomeNotification(userId);
   }
 
   /**

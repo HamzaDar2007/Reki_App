@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { NotificationType } from '../../common/enums';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private notificationsRepository: Repository<Notification>,
+    private pushService: PushService,
   ) {}
 
   async findByUserId(userId: string, page = 1, limit = 20): Promise<{ items: Notification[]; total: number }> {
@@ -104,13 +106,26 @@ export class NotificationsService {
    * Create a welcome notification for a new user.
    */
   async createWelcomeNotification(userId: string): Promise<Notification> {
-    return this.createNotification({
+    const notification = await this.createNotification({
       userId,
       type: NotificationType.WELCOME,
       title: 'Welcome to REKI! 🎉',
       message: "Start exploring Manchester's best vibes. Save your favourite venues to get live alerts!",
       icon: '🎉',
     });
+
+    // Send push notification
+    await this.pushService.sendToUser(
+      userId,
+      NotificationType.WELCOME,
+      {
+        title: 'Welcome to REKI! 🎉',
+        body: "Start exploring Manchester's best vibes. Save your favourite venues to get live alerts!",
+        data: { type: 'WELCOME', deepLink: 'reki://home' },
+      },
+    );
+
+    return notification;
   }
 
   /**
