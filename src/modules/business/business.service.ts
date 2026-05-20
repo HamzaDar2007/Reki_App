@@ -460,6 +460,7 @@ export class BusinessService {
     return {
       views: { total: today?.totalViews || 0, change: this.calcChange(today?.totalViews || 0, yesterday?.totalViews || 0) },
       saves: {
+        total: allTimeSaves,
         today: today?.totalSaves || 0,
         allTime: allTimeSaves,
         change: this.calcChange(today?.totalSaves || 0, yesterday?.totalSaves || 0),
